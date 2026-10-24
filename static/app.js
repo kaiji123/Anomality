@@ -596,7 +596,7 @@
     el.innerHTML = `
       <div class="hero-head">
         <span class="core-badge">★ Core feature</span>
-        <h2>This week's crisis report</h2>
+        <h2>This week's anomaly report</h2>
         <span class="muted">How much prices could move this week, from a crash-tested AI model · data to ${esc(m.date)}</span>
       </div>
       <div class="hero-grid">
@@ -630,7 +630,7 @@
         </div>
       </div>
       <details class="hero-more" id="report-more" ${state.heroChart ? "open" : ""}>
-        <summary><span class="when-closed">Read more about the crisis report</span><span class="when-open">Hide the full report</span></summary>
+        <summary><span class="when-closed">Read more about the anomaly report</span><span class="when-open">Hide the full report</span></summary>
 
         <section class="report-sec">
           <h3>1. Why this report holds up in a crash</h3>

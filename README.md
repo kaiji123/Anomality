@@ -1,9 +1,9 @@
 # anomality
 
-**A weekly crisis report for stocks and crypto: how much prices could move this week, from an
+**A weekly anomaly report for stocks and crypto: how much prices could move this week, from an
 AI model built to stay reliable when markets crash.**
 
-![anomality: this week's crisis report](docs/images/product_crisis_report.png)
+![anomality: this week's anomaly report](docs/images/product_anomaly_report.png)
 
 Most forecasting models learn from normal markets and then break down in a crash, exactly
 when you need them. anomality is built on a 2026 research model (RG-ResMoE) that we
@@ -26,7 +26,7 @@ weeks it never saw (May 2019 – Oct 2026, 56 assets, 103,593 forecasts).
 
 ## The product
 
-### This week's crisis report
+### This week's anomaly report
 
 Four plain answers at the top of the app: the **market mood**, the **expected move this
 week** for a typical stock and crypto, the **biggest and calmest expected swings**, and
@@ -62,12 +62,12 @@ to see the crash-proofing at work, here for NVDA in the 2020 crash:
 
 ### The full report, for the curious
 
-**Read more about the crisis report** opens the detail: why the model holds up in a crash
+**Read more about the anomaly report** opens the detail: why the model holds up in a crash
 (a COVID-sized shock looks 10.6× "off the charts" to the original model, 5.1× to ours), the
 full track record, and the model internals (regime gate weights, crisis herding, and the
 research statistics).
 
-![Full crisis report](docs/images/product_full_report.png)
+![Full anomaly report](docs/images/product_full_report.png)
 
 | Dark mode | Phone |
 |---|---|
@@ -80,7 +80,7 @@ flowchart LR
     A["Daily prices<br/>56 stocks, ETFs<br/>and crypto"] --> B["Volatility features<br/><b>log-scaled</b> (our fix)"]
     B --> C["RG-ResMoE<br/>base network + 4 experts<br/>+ regime gate"]
     C --> D["Next-week<br/>volatility forecast"]
-    D --> E["Crisis report<br/>mood · expected move<br/>· surprises"]
+    D --> E["Anomaly report<br/>mood · expected move<br/>· surprises"]
     classDef ours fill:#2a78d6,stroke:#1c5cab,color:#ffffff;
     class B ours;
 ```
@@ -111,7 +111,7 @@ cd Anomality
 ```
 
 The first run installs everything (about a minute) and opens **http://localhost:8000**. The
-trained models ship in `models/`, so the crisis report works straight away. Press `Ctrl+C` to stop.
+trained models ship in `models/`, so the anomaly report works straight away. Press `Ctrl+C` to stop.
 Different port: `PORT=8080 ./run.sh`.
 
 <details>
@@ -142,17 +142,17 @@ uvicorn backend.app:app --port 8000
 |---|---|
 | `Address already in use` | Another program is using port 8000. Run `PORT=8080 ./run.sh` |
 | `permission denied: ./run.sh` | `chmod +x run.sh` |
-| Crisis report missing | Check that `models/rg_resmoe.pt`, `models/rg_resmoe_paper.pt` and `models/serving_*.csv.gz` exist, or retrain |
+| Anomaly report missing | Check that `models/rg_resmoe.pt`, `models/rg_resmoe_paper.pt` and `models/serving_*.csv.gz` exist, or retrain |
 | Yellow "synthetic demo data" banner | Yahoo Finance couldn't be reached. Check your connection and click ↻ Rescan |
 | `Symbol not found` | Use Yahoo's format, e.g. `BTC-USD` not `BTC`, `BHP.AX` for Australian stocks |
-| "Not in the training universe yet" | The crisis report covers the 56 trained assets; other tickers get the classic analysis only |
+| "Not in the training universe yet" | The anomaly report covers the 56 trained assets; other tickers get the classic analysis only |
 | `NotOpenSSLWarning` on macOS | Harmless; ignore it |
 
 </details>
 
 ## Also inside: classic anomaly detection
 
-Below the crisis report, every asset also gets the original anomaly toolkit: z-score and
+Below the anomaly report, every asset also gets the classic detection toolkit: z-score and
 Isolation Forest anomaly flags on the price chart, and a random forest / decision tree that
 estimates the chance of an unusual move, with its decision path and the full interactive tree.
 It works for any Yahoo Finance ticker.
@@ -174,7 +174,7 @@ It works for any Yahoo Finance ticker.
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/regime/market` | This week's crisis report: mood and scale, expected moves, biggest swings, track record |
+| `GET /api/regime/market` | This week's anomaly report: mood and scale, expected moves, biggest swings, track record |
 | `GET /api/regime/{symbol}` | One asset: expected move, mood and scale, history, accuracy, surprises |
 | `GET /api/analyze/{symbol}` | Classic anomaly detection and decision model for any ticker |
 | `GET /api/scan?symbols=…` | Classic model summary for several tickers |
