@@ -1,0 +1,1 @@
+"""adaptivetrader namespace"""
