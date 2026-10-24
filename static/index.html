@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>anomality</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232a78d6'/><path d='M5 20 L11 20 L14 8 L18 25 L21 15 L27 15' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M5 20 L11 20 L14 8 L18 25 L21 15 L27 15" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>anomality</span>
+    </div>
+    <form id="search" class="search" autocomplete="off">
+      <input id="search-input" type="text" placeholder="Add ticker: AAPL, BTC-USD, ^GSPC…" aria-label="Ticker symbol" />
+      <button type="submit">Analyze</button>
+    </form>
+    <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  </header>
+
+  <section class="controls" aria-label="Model settings">
+    <label>History
+      <select id="period">
+        <option value="1y">1 year</option>
+        <option value="2y">2 years</option>
+        <option value="5y" selected>5 years</option>
+        <option value="10y">10 years</option>
+      </select>
+    </label>
+    <label title="A day counts as unusual when its move is this many standard deviations from normal">Sensitivity
+      <span class="range"><input id="threshold" type="range" min="1.5" max="4" step="0.1" value="2.5" /><output id="threshold-out">2.5σ</output></span>
+    </label>
+    <label title="How many days ahead the model looks for an unusual move">Horizon
+      <span class="range"><input id="horizon" type="range" min="1" max="20" step="1" value="5" /><output id="horizon-out">5 days</output></span>
+    </label>
+    <label>Model
+      <select id="model">
+        <option value="forest" selected>Random forest</option>
+        <option value="tree">Decision tree</option>
+      </select>
+    </label>
+    <label title="Maximum depth of the decision tree(s)">Tree depth
+      <span class="range"><input id="depth" type="range" min="2" max="6" step="1" value="4" /><output id="depth-out">4</output></span>
+    </label>
+    <button id="rescan" class="ghost">↻ Rescan</button>
+  </section>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-group="all">All</button>
+        <button class="tab" data-group="stocks">Stocks</button>
+        <button class="tab" data-group="crypto">Crypto</button>
+        <button class="tab" data-group="custom">Mine</button>
+      </div>
+      <div class="sort-row">
+        <span class="muted">Sort</span>
+        <select id="sort">
+          <option value="risk">Risk score</option>
+          <option value="anomaly">Anomaly today</option>
+          <option value="change">Daily move</option>
+          <option value="symbol">Symbol</option>
+        </select>
+      </div>
+      <ul id="watchlist" class="watchlist"></ul>
+      <p class="muted small" id="scan-status"></p>
+    </aside>
+
+    <main id="detail" class="detail">
+      <div class="empty">Select an asset from the watchlist to see its anomalies and the model's verdict.</div>
+    </main>
+  </div>
+
+  <footer class="footer muted small">
+    anomality is a statistical research tool, not financial advice. Data: Yahoo Finance (daily candles).
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
