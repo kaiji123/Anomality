@@ -25,3 +25,18 @@ def pytest_collection_modifyitems(config, items):
 
 def pytest_addoption(parser):
     parser.addoption("--run-network", action="store_true", help="also run tests that fetch live market data")
+
+
+@pytest.fixture(autouse=True)
+def _block_network(request, monkeypatch):
+    """Offline tests must really be offline (CI servers have no price cache and Yahoo may block
+    them). Any connection attempt fails loudly unless the test is marked `network`."""
+    if "network" in request.keywords:
+        return
+    import socket
+
+    def guard(*args, **kwargs):
+        raise RuntimeError(f"{request.node.name} tried to use the network; mark it @pytest.mark.network")
+
+    monkeypatch.setattr(socket.socket, "connect", guard)
+    monkeypatch.setattr(socket, "create_connection", guard)

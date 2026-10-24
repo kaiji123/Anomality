@@ -32,7 +32,7 @@ STRESS_PERIODS = {label: (start, end) for label, start, end in _PERIODS.values()
 COVID = STRESS_PERIODS["COVID crash"]
 REGIME_NAMES = ["Calm", "Normal", "Elevated", "Stress"]  # experts ranked by market vol when dominant
 
-_lock = threading.Lock()
+_lock = threading.RLock()  # re-entrant: _ensure_loaded calls _preds() while holding it
 _state: Dict[str, object] = {}
 
 
@@ -103,6 +103,17 @@ def _expert_names(m: dict, panel: pd.DataFrame) -> list:
     return names
 
 
+_preds_cache: Dict[str, Optional[pd.DataFrame]] = {}
+
+
+def _preds() -> Dict[str, Optional[pd.DataFrame]]:
+    """Walk-forward forecasts only (local files, no network, no models). Loaded once."""
+    with _lock:
+        if not _preds_cache:
+            _preds_cache.update({"log": _load_preds("paper_log"), "raw": _load_preds("paper")})
+        return _preds_cache
+
+
 def _ensure_loaded() -> dict:
     with _lock:
         if _state.get("loaded_at") and time.time() - _state["loaded_at"] < 600:
@@ -117,10 +128,9 @@ def _ensure_loaded() -> dict:
             "log": log_m,
             "raw": raw_m,
             "names": _expert_names(log_m, panel),
-            "preds_log": _load_preds("paper_log"),
-            "preds_raw": _load_preds("paper"),
+            "preds_log": _preds()["log"],
+            "preds_raw": _preds()["raw"],
             "market": None,
-            "track": None,
             "loaded_at": time.time(),
         })
         return _state
@@ -334,13 +344,16 @@ def _research(a: pd.DataFrame, b: pd.DataFrame, res: dict) -> dict:
             "p_value": float(stats.ttest_1samp(wk, 0).pvalue), "days_better": round(float((d > 0).mean()), 3)}
 
 
+_track_cache: dict = {}
+
+
 def track_record() -> Optional[dict]:
     """Plain-language track record over all out-of-sample forecasts (all assets)."""
-    st = _ensure_loaded()
     with _lock:
-        if st.get("track"):
-            return st["track"]
-    pl, pr = st["preds_log"], st["preds_raw"]
+        if _track_cache:
+            return _track_cache["value"]
+    preds = _preds()
+    pl, pr = preds["log"], preds["raw"]
     if pl is None or pr is None:
         return None
     a = pl.reset_index()
@@ -370,7 +383,7 @@ def track_record() -> Optional[dict]:
         "research": _research(a, b, res),
     }
     with _lock:
-        st["track"] = out
+        _track_cache["value"] = out
     return out
 
 
