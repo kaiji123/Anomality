@@ -56,6 +56,45 @@
     const sym = cur === "USD" ? "$" : "";
     return sym + v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits }) + (sym ? "" : ` ${cur}`);
   }
+  // ---------- motion: small, one-time animations that point at the key numbers ----------
+  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const played = new Set();
+  // Run `fn` only the first time `key` is seen this page load (re-renders, e.g. theme changes, don't replay).
+  const once = (key, fn) => { if (played.has(key) || calm()) return; played.add(key); fn(); };
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  // Count the first number in each element's text up from 0, keeping its prefix, suffix and decimals.
+  function countUp(els, ms = 900) {
+    els.forEach((el) => {
+      const m = el.textContent.match(/^([^\d]*?)(\d[\d,]*(?:\.\d+)?)(.*)$/s);
+      if (!m) return;
+      const [, pre, num, post] = m;
+      const target = parseFloat(num.replace(/,/g, "")), dec = (num.split(".")[1] || "").length;
+      const fmt = (v) => pre + v.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + post;
+      const t0 = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / ms);
+        el.textContent = fmt(target * ease(t));
+        if (t < 1) requestAnimationFrame(step);
+      };
+      el.textContent = fmt(0);
+      requestAnimationFrame(step);
+    });
+  }
+  // Slide each element's CSS `prop` (left or width) from 0 to its current value.
+  function sweep(els, prop = "left", ms = 900) {
+    els.forEach((el) => {
+      const target = el.style[prop];
+      if (!target) return;
+      el.style.transition = "none";
+      el.style[prop] = "0%";
+      void el.offsetWidth; // apply the start position before transitioning
+      el.style.transition = `${prop} ${ms}ms cubic-bezier(.2,.8,.2,1)`;
+      el.style[prop] = target;
+      setTimeout(() => { el.style.transition = ""; }, ms + 50);
+    });
+  }
+  const reveal = (el) => { if (el && !calm()) { el.classList.remove("reveal"); void el.offsetWidth; el.classList.add("reveal"); } };
+
   const badge = (v) => v ? `<span class="badge ${v}">${VERDICT[v].icon} ${VERDICT[v].label}</span>` : `<span class="badge ERR">n/a</span>`;
 
   function params() {
@@ -180,7 +219,9 @@
       }));
       if (token !== state.scanToken) return;
       const flagged = symbols.filter((s) => state.scan[s]?.verdict === "HIGH").length;
-      $("#scan-status").textContent = `Scanned ${symbols.length} assets in ${((performance.now() - t0) / 1000).toFixed(1)}s · ${flagged} flagged high risk.`;
+      const saved = symbols.filter((s) => state.scan[s]?.cached).length;
+      $("#scan-status").textContent = `Scanned ${symbols.length} assets in ${((performance.now() - t0) / 1000).toFixed(1)}s · ${flagged} flagged high risk.`
+        + (saved ? ` ${saved} use saved prices because Yahoo Finance is unavailable.` : "");
     } catch (e) {
       $("#scan-status").textContent = `Scan failed: ${e.message}`;
     }
@@ -247,7 +288,7 @@
         <h1>${esc(s.symbol)}</h1><span class="name">${esc(s.name)}</span>
         <span class="price num">${money(s.price, s.currency)} <span class="${up ? "up" : "down"}" style="font-size:15px">${signed(s.change_pct)}%</span></span>
       </div>
-      <div class="asset-sub">${esc(s.exchange)} · ${esc(s.type)} · last close ${esc(s.last_date)}${s.session_in_progress ? " · today's session is still open and not included yet" : ""}</div>
+      <div class="asset-sub">${esc(s.exchange)} · ${esc(s.type)} · last close ${esc(s.last_date)}${s.session_in_progress ? " · today's session is still open and not included yet" : ""}${s.cached ? ` · <span class="saved-tag" title="Yahoo Finance couldn't be reached, so these are prices saved ${esc(s.as_of)}">saved prices (${s.source === "snapshot" ? "snapshot" : "cache"}, ${esc(s.as_of)})</span>` : ""}</div>
       <div id="regime-card"></div>
       <div id="decision-card"></div>
       ${s.synthetic ? `<div class="banner">⚠ Live data could not be fetched, so this shows <b>synthetic demo data</b>. Check your internet connection.</div>` : ""}
@@ -304,7 +345,7 @@
         </div>
       </div>
 
-      <div class="grid two">
+      <div class="grid two tree-log">
         <div class="card">
           <div class="card-head"><div><h2>Decision tree</h2><p class="sub">Each node: share of days followed by an unusual move. Today's path is highlighted. Click a node to collapse it.</p></div></div>
           <div class="tree" id="tree"></div>
@@ -724,10 +765,18 @@
         </section>
       </details>`;
     el.hidden = false;
+    once("hero", () => {
+      reveal(el);
+      countUp($$(".moves .mv", el));
+      sweep($$(".ms-marker", el));
+    });
     $("#report-more").addEventListener("toggle", (e) => {
       state.heroChart = e.target.open;
       store.set("anomality.heroChart", state.heroChart);
-      if (state.heroChart) drawReportCharts(m);
+      if (state.heroChart) {
+        drawReportCharts(m);
+        once("sig", () => { sweep($$(".sig-fill", el), "width", 1100); countUp($$(".sig-val", el), 1100); });
+      }
     });
     el.querySelectorAll(".link-btn[data-sym]").forEach((b) => b.addEventListener("click", () => {
       const s = b.dataset.sym;
@@ -863,6 +912,11 @@
           </div>
         </details>
       </div>`;
+    once(`regime-${sym}`, () => {
+      reveal($(".card.feature", el));
+      countUp($$(".fh-big", el));
+      sweep($$(".ms-marker", el));
+    });
     if (h) {
       drawRegimeChart(r);
       $("#regime-range").addEventListener("click", (e) => {
@@ -1034,6 +1088,11 @@
       </div>`;
     el.hidden = false;
     updateRuleTry();
+    once("decision", () => {
+      reveal(el);
+      countUp($$(".dv", el));
+      sweep($$("#rule-try .sm-marker", el));
+    });
     $("#rule-slider").addEventListener("input", (e) => { state.ruleTry = +e.target.value; updateRuleTry(); });
     $("#dec-period").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
@@ -1218,6 +1277,10 @@
           </div>
         </div>
       </div>`;
+    once(`decision-${sym}`, () => {
+      reveal($(".card.dec-card", el));
+      sweep($$(".sm-marker", el));
+    });
   }
 
   // Levels explanation in a modal dialog

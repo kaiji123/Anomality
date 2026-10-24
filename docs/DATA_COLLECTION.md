@@ -28,7 +28,8 @@ saved only in your browser (`localStorage`).
   or when you change a setting.
 - Each `(symbol, history range)` result is **cached in memory for 10 minutes**, so
   changing the sensitivity, horizon, model or tree depth reuses the same prices.
-- **Nothing is written to disk.** Restarting the server clears the cache.
+- Every good download is also **saved to disk** in `data/cache/` (not in git). A copy saved
+  in the last 10 minutes is reused after a server restart instead of downloading again.
 - A scan fetches up to 8 symbols in parallel.
 
 ## Cleaning steps
@@ -79,13 +80,29 @@ future. z-scores compare a day against the **previous** 20 days, not including t
 setting) has \|return z\| above the sensitivity threshold. The last *H* days have no
 known outcome yet, so they are left out of training and only scored.
 
-## Offline fallback (synthetic data)
+## When Yahoo is unavailable (rate limits, no network)
 
-If Yahoo cannot be reached (no network, timeout, server error or rate limit), the app
-generates **synthetic demo data** instead of failing: a random walk with fat-tailed returns,
-shifting volatility and occasional jumps, seeded by the ticker name. Synthetic data is
-always flagged (`synthetic: true` in the API, a yellow banner and "(synthetic demo data)" in
-the name). An unknown ticker never falls back; it returns "Symbol not found".
+If Yahoo cannot be reached (no network, timeout, server error, rate limit or an unreadable
+response), the app falls back in this order:
+
+1. **Saved prices.** The newest saved copy that covers the requested range, from the local
+   disk cache or from the **snapshot that ships with the repo** (`data/snapshot/`: 10 years
+   of daily prices for all 56 assets, about 3.4 MB). A longer copy is trimmed to the range
+   asked for; a shorter one is never stretched. Saved prices are flagged (`cached: true`,
+   `source`, `as_of` in the API) and labelled "saved prices" in the app.
+2. **Synthetic demo data**, only for tickers with nothing saved (e.g. one you typed in): a
+   random walk with fat-tailed returns, shifting volatility and occasional jumps, seeded by
+   the ticker name. Always flagged (`synthetic: true`, a yellow banner and "(synthetic demo
+   data)" in the name). The regime model never uses synthetic data.
+
+After a failure, Yahoo is **paused for 3 minutes**, so a rate limit doesn't make every
+request wait for its own error, and answers from saved prices are retried after a minute.
+`GET /api/status` shows whether Yahoo is paused and why. An unknown ticker never falls back;
+it returns "Symbol not found".
+
+**Offline mode for demos:** `ANOMALITY_OFFLINE=1 ./run.sh` never calls Yahoo and runs
+everything from saved prices. Refresh the snapshot before an event with
+`python -m backend.snapshot` (it fetches all 56 assets and takes about a minute).
 
 ## Known limitations
 

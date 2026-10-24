@@ -29,9 +29,13 @@ def load_closes(symbols: List[str], period: str, use_cache: bool = True) -> pd.D
         if set(symbols) <= set(closes.columns):
             return closes[symbols]
 
+    saved = []  # symbols served from saved prices because Yahoo failed
+
     def one(sym: str) -> Tuple[str, pd.Series]:
         try:
-            df, _ = load_prices(sym, period, allow_synthetic=False)
+            df, info = load_prices(sym, period, allow_synthetic=False)
+            if info.get("cached"):
+                saved.append(sym)
             return sym, df["close"]
         except Exception as e:  # skip symbols that fail to download
             print(f"  skipping {sym}: {e}")
@@ -42,8 +46,9 @@ def load_closes(symbols: List[str], period: str, use_cache: bool = True) -> pd.D
     closes = pd.DataFrame(series)
     if closes.empty:
         raise RuntimeError("Could not download any prices (no network?). Nothing was cached.")
-    with atomic_path(cache) as tmp:
-        tmp.write_bytes(pickle.dumps(closes))
+    if not saved:  # only keep fresh downloads for 12 hours; saved prices are retried next time
+        with atomic_path(cache) as tmp:
+            tmp.write_bytes(pickle.dumps(closes))
     return closes
 
 

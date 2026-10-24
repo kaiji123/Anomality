@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .analysis import FEATURES, DecisionModel, Settings, detect, features
 from .data import DataError, load_prices
+from .data import status as data_status
 from . import decision_service
 from .regime_service import RegimeUnavailable, plain_asset, plain_market
 
@@ -118,7 +119,13 @@ def _settings(threshold: float, horizon: int, depth: int, model: str) -> Setting
 
 @app.get("/api/watchlist")
 def watchlist():
-    return {**WATCHLIST, "features": FEATURES}
+    return {**WATCHLIST, "features": FEATURES, "data": data_status()}
+
+
+@app.get("/api/status")
+def api_status():
+    """Where prices are coming from: Yahoo, or saved copies (offline mode or Yahoo paused)."""
+    return data_status()
 
 
 @app.get("/api/analyze/{symbol}")

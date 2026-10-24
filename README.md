@@ -148,6 +148,12 @@ The first run installs everything (about a minute) and opens **http://localhost:
 trained models ship in `models/`, so the anomaly report works straight away. Press `Ctrl+C` to stop.
 Different port: `PORT=8080 ./run.sh`.
 
+**No internet, or Yahoo rate-limiting you?** The app keeps working: it falls back to the
+last prices it saved, and to a 10-year snapshot of all 56 assets that ships with the repo
+(labelled "saved prices" in the app). For a demo on unreliable Wi-Fi, run
+`ANOMALITY_OFFLINE=1 ./run.sh` to skip Yahoo entirely; refresh the snapshot beforehand with
+`.venv/bin/python -m backend.snapshot`.
+
 <details>
 <summary>Manual setup, retraining and troubleshooting</summary>
 
@@ -178,7 +184,8 @@ uvicorn backend.app:app --port 8000
 | `Address already in use` | Another program is using port 8000. Run `PORT=8080 ./run.sh` |
 | `permission denied: ./run.sh` | `chmod +x run.sh` |
 | Anomaly report missing | Check that `models/rg_resmoe.pt`, `models/rg_resmoe_paper.pt` and `models/serving_*.csv.gz` exist, or retrain |
-| Yellow "synthetic demo data" banner | Yahoo Finance couldn't be reached. Check your connection and click ↻ Rescan |
+| "Saved prices" label | Yahoo Finance couldn't be reached or rate-limited you, so the app used saved prices. It retries Yahoo after 3 minutes; `GET /api/status` shows why |
+| Yellow "synthetic demo data" banner | Yahoo Finance couldn't be reached and nothing is saved for that ticker. Check your connection and click ↻ Rescan |
 | `Symbol not found` | Use Yahoo's format, e.g. `BTC-USD` not `BTC`, `BHP.AX` for Australian stocks |
 | "Not in the training universe yet" | The anomaly report covers the 56 trained assets; other tickers get the classic analysis only |
 | `NotOpenSSLWarning` on macOS | Harmless; ignore it |
@@ -189,7 +196,7 @@ uvicorn backend.app:app --port 8000
 
 ```bash
 pip install -r requirements-dev.txt     # pinned app dependencies + pytest, httpx, ruff
-pytest                                  # 31 offline tests: metrics, data cleaning, walk-forward splits, report logic, decision layer
+pytest                                  # 36 offline tests: metrics, data cleaning, walk-forward splits, report logic, decision layer
 pytest --run-network                    # + live end-to-end API tests against Yahoo Finance
 ruff check .                            # lint for real bugs (undefined names, unused imports)
 
@@ -233,6 +240,7 @@ It works for any Yahoo Finance ticker.
 | `GET /api/decision/{symbol}` | One asset: today's position, reason, switches, and its own backtest |
 | `GET /api/analyze/{symbol}` | Classic anomaly detection and decision model for any ticker |
 | `GET /api/scan?symbols=…` | Classic model summary for several tickers |
+| `GET /api/status` | Where prices come from: Yahoo, offline mode, or paused after a rate limit |
 
 > anomality is a research tool, not financial advice. It forecasts how much prices may move,
 > not which direction, and no model can predict the timing of a crash. Its accuracy is shown
