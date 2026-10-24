@@ -6,3 +6,7 @@ models/cache/
 models/*.csv
 scripts/node_modules/
 scripts/package-lock.json
+data/raw/
+data/processed/
+.pytest_cache/
+Thumbs.db
