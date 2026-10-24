@@ -1,0 +1,79 @@
+Building panel…
+  129,769 rows, 56 assets, 2374 dates, 30 walk-forward windows (0.6s)
+  RG-ResMoE: 3,177 weights · size-matched MLP width 44 (2,773 weights)
+  [ 1/30] test 2019-05-17…2019-08-15  IC moe 0.627 · mlp 0.600 · naive 0.587  QLIKE moe 0.747 · mlp 0.876 · naive 0.870  (8.9s)
+  [ 2/30] test 2019-08-16…2019-11-13  IC moe 0.575 · mlp 0.568 · naive 0.552  QLIKE moe 0.518 · mlp 0.523 · naive 0.585  (10.0s)
+  [ 3/30] test 2019-11-14…2020-02-14  IC moe 0.622 · mlp 0.615 · naive 0.605  QLIKE moe 0.590 · mlp 0.603 · naive 0.704  (192.0s)
+  [ 4/30] test 2020-02-18…2020-05-15  IC moe 0.524 · mlp 0.520 · naive 0.499  QLIKE moe 1.653 · mlp 1.877 · naive 1.464  (17.2s)
+  [ 5/30] test 2020-05-18…2020-08-14  IC moe 0.621 · mlp 0.611 · naive 0.601  QLIKE moe 0.812 · mlp 0.734 · naive 0.904  (8.8s)
+  [ 6/30] test 2020-08-17…2020-11-12  IC moe 0.564 · mlp 0.564 · naive 0.582  QLIKE moe 0.737 · mlp 1.179 · naive 0.722  (8.9s)
+  [ 7/30] test 2020-11-13…2021-02-16  IC moe 0.674 · mlp 0.679 · naive 0.671  QLIKE moe 1.044 · mlp 1.063 · naive 0.809  (16.6s)
+  [ 8/30] test 2021-02-17…2021-05-17  IC moe 0.651 · mlp 0.697 · naive 0.696  QLIKE moe 0.528 · mlp 0.591 · naive 0.525  (170.8s)
+  [ 9/30] test 2021-05-18…2021-08-16  IC moe 0.672 · mlp 0.656 · naive 0.654  QLIKE moe 0.564 · mlp 0.588 · naive 0.686  (12.5s)
+  [10/30] test 2021-08-17…2021-11-12  IC moe 0.638 · mlp 0.626 · naive 0.630  QLIKE moe 0.592 · mlp 0.606 · naive 0.631  (13.4s)
+  [11/30] test 2021-11-15…2022-02-14  IC moe 0.677 · mlp 0.655 · naive 0.677  QLIKE moe 0.727 · mlp 0.682 · naive 0.792  (8.9s)
+  [12/30] test 2022-02-15…2022-05-16  IC moe 0.676 · mlp 0.661 · naive 0.689  QLIKE moe 0.521 · mlp 0.542 · naive 0.666  (16.9s)
+  [13/30] test 2022-05-17…2022-08-16  IC moe 0.732 · mlp 0.731 · naive 0.711  QLIKE moe 0.452 · mlp 0.468 · naive 0.484  (13.9s)
+  [14/30] test 2022-08-17…2022-11-14  IC moe 0.596 · mlp 0.587 · naive 0.558  QLIKE moe 0.707 · mlp 0.776 · naive 0.747  (13.9s)
+  [15/30] test 2022-11-15…2023-02-15  IC moe 0.700 · mlp 0.704 · naive 0.685  QLIKE moe 0.418 · mlp 0.440 · naive 0.489  (22.1s)
+  [16/30] test 2023-02-16…2023-05-17  IC moe 0.650 · mlp 0.658 · naive 0.615  QLIKE moe 0.600 · mlp 0.665 · naive 0.769  (18.2s)
+  [17/30] test 2023-05-18…2023-08-17  IC moe 0.642 · mlp 0.645 · naive 0.606  QLIKE moe 0.642 · mlp 0.645 · naive 0.744  (12.7s)
+  [18/30] test 2023-08-18…2023-11-15  IC moe 0.598 · mlp 0.585 · naive 0.547  QLIKE moe 0.653 · mlp 0.635 · naive 0.689  (10.0s)
+  [19/30] test 2023-11-16…2024-02-16  IC moe 0.613 · mlp 0.590 · naive 0.606  QLIKE moe 0.681 · mlp 0.710 · naive 0.778  (11.2s)
+  [20/30] test 2024-02-20…2024-05-17  IC moe 0.668 · mlp 0.663 · naive 0.610  QLIKE moe 0.666 · mlp 0.668 · naive 0.804  (11.1s)
+  [21/30] test 2024-05-20…2024-08-19  IC moe 0.615 · mlp 0.604 · naive 0.577  QLIKE moe 0.956 · mlp 0.874 · naive 0.903  (12.2s)
+  [22/30] test 2024-08-20…2024-11-15  IC moe 0.622 · mlp 0.615 · naive 0.580  QLIKE moe 0.753 · mlp 0.792 · naive 0.859  (20.0s)
+  [23/30] test 2024-11-18…2025-02-20  IC moe 0.620 · mlp 0.613 · naive 0.582  QLIKE moe 0.587 · mlp 0.598 · naive 0.659  (16.2s)
+  [24/30] test 2025-02-21…2025-05-21  IC moe 0.625 · mlp 0.620 · naive 0.584  QLIKE moe 1.163 · mlp 1.132 · naive 1.044  (13.3s)
+  [25/30] test 2025-05-22…2025-08-21  IC moe 0.641 · mlp 0.633 · naive 0.620  QLIKE moe 0.524 · mlp 0.537 · naive 0.577  (14.2s)
+  [26/30] test 2025-08-22…2025-11-19  IC moe 0.634 · mlp 0.628 · naive 0.610  QLIKE moe 0.719 · mlp 0.756 · naive 0.801  (8.9s)
+  [27/30] test 2025-11-20…2026-02-23  IC moe 0.634 · mlp 0.637 · naive 0.616  QLIKE moe 0.698 · mlp 0.670 · naive 0.694  (10.9s)
+  [28/30] test 2026-02-24…2026-05-22  IC moe 0.554 · mlp 0.545 · naive 0.522  QLIKE moe 0.492 · mlp 0.510 · naive 0.550  (14.3s)
+  [29/30] test 2026-05-26…2026-08-24  IC moe 0.584 · mlp 0.581 · naive 0.535  QLIKE moe 0.526 · mlp 0.549 · naive 0.612  (12.5s)
+  [30/30] test 2026-08-25…2026-10-23  IC moe 0.645 · mlp 0.647 · naive 0.608  QLIKE moe 0.518 · mlp 0.512 · naive 0.538  (10.7s)
+Saved models/rg_resmoe_paper_log.pt, walkforward_results_paper_log.json, walkforward_predictions_paper_log.csv
+
+Out-of-sample results ['2019-05-17', '2026-10-16'] (103,593 forecasts)
+
+  all
+    model                     IC            RMSE           QLIKE  collapsed
+    rg_resmoe      0.6307±0.0009   0.2580±0.0010   0.6976±0.0070        0/3
+    plain_mlp      0.6249±0.0020   0.2595±0.0007   0.7311±0.0169        0/3
+    base_only      0.6290±0.0014   0.2584±0.0011   0.6976±0.0051        0/3
+    naive_rv20            0.6072          0.2816          0.7383
+
+  stocks
+    model                     IC            RMSE           QLIKE  collapsed
+    rg_resmoe      0.5150±0.0011   0.1749±0.0008   0.6501±0.0040        0/3
+    plain_mlp      0.5073±0.0024   0.1770±0.0011   0.6854±0.0166        0/3
+    base_only      0.5125±0.0020   0.1754±0.0009   0.6495±0.0030        0/3
+    naive_rv20            0.4866          0.1923          0.7163
+
+  crypto
+    model                     IC            RMSE           QLIKE  collapsed
+    rg_resmoe      0.4199±0.0035   0.5437±0.0022   0.9994±0.0265        0/3
+    plain_mlp      0.4129±0.0038   0.5445±0.0010   1.0215±0.0212        0/3
+    base_only      0.4256±0.0044   0.5438±0.0023   1.0039±0.0183        0/3
+    naive_rv20            0.4130          0.5905          0.8788
+
+  covid_crash
+    model                     IC            RMSE           QLIKE  collapsed
+    rg_resmoe      0.4877±0.0096   0.5695±0.0108   2.0105±0.2178        0/3
+    plain_mlp      0.4849±0.0189   0.5759±0.0080   2.0641±0.0950        0/3
+    base_only      0.5043±0.0124   0.5708±0.0127   2.0541±0.1879        0/3
+    naive_rv20            0.4718          0.6566          1.7007
+
+  2022_bear_market
+    model                     IC            RMSE           QLIKE  collapsed
+    rg_resmoe      0.6640±0.0021   0.2503±0.0013   0.5406±0.0139        0/3
+    plain_mlp      0.6574±0.0043   0.2525±0.0021   0.5672±0.0373        0/3
+    base_only      0.6656±0.0011   0.2490±0.0009   0.5295±0.0200        0/3
+    naive_rv20            0.6544          0.2640          0.6008
+
+  Experts (stocks, seed 0): when each dominates
+    expert 0: dominant 22% of rows · avg weight 0.25 · market vol 0.2011 · realized vol 0.3105
+    expert 1: dominant 32% of rows · avg weight 0.24 · market vol 0.1311 · realized vol 0.2196
+    expert 2: dominant 28% of rows · avg weight 0.26 · market vol 0.1778 · realized vol 0.2929
+    expert 3: dominant 19% of rows · avg weight 0.25 · market vol 0.1543 · realized vol 0.2826
+
+  Total time 748.2s

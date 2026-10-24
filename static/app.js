@@ -33,7 +33,12 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const pct = (v, d = 1) => (v == null ? "–" : `${(v * 100).toFixed(d)}%`);
-  const signed = (v, d = 2) => (v == null ? "–" : `${v > 0 ? "+" : ""}${v.toFixed(d)}`);
+  const signed = (v, d = 2) => {
+    if (v == null) return "–";
+    const s = v.toFixed(d);
+    if (Number(s) === 0) return (0).toFixed(d); // avoid "-0.0"
+    return `${v > 0 ? "+" : ""}${s}`;
+  };
   function money(v, cur = "USD") {
     if (v == null) return "–";
     const digits = v >= 1000 ? 2 : v >= 1 ? 2 : v >= 0.01 ? 4 : 6;

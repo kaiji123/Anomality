@@ -1,0 +1,22 @@
+flowchart TB
+    P["Daily prices<br/>56 assets"] --> V["Volatility inputs<br/>5d · 20d · 60d vol<br/>market vol · stock-specific vol"]
+    P --> O["Other inputs<br/>returns · RSI · last 10 returns"]
+    V --> L["<b>log( )</b><br/>our addition"]
+    L --> S["Standardise<br/>(fitted on training window)"]
+    O --> S
+    S -- "16 stock features x" --> B["Base network<br/>(frozen)"]
+    S -- "x" --> E["4 correction experts"]
+    S -- "x + 2 regime variables z" --> G["Regime gate<br/>softmax weights"]
+    G --> M(("Σ"))
+    E --> M
+    B --> F["Forecast:<br/>next-5-day volatility"]
+    M --> F
+    F --> A["Anomaly score<br/>actual ÷ forecast"]
+    G --> R["Regime view<br/>expert weights"]
+    classDef ours fill:#2a78d6,stroke:#1c5cab,color:#ffffff,font-weight:bold;
+    classDef model fill:#f3f2ee,stroke:#c3c2b7,color:#0b0b0b;
+    classDef out fill:#fcfcfb,stroke:#2a78d6,color:#0b0b0b;
+    class L ours;
+    class P,V,O,S model;
+    class B,E,G,M model;
+    class A,R,F out;

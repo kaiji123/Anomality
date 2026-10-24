@@ -3,6 +3,20 @@
 Detects anomalies in stocks and cryptocurrencies and uses a decision model to judge
 which assets are likely to make an **unusual move** in the coming days.
 
+## Screenshots
+
+![Dashboard, light mode](docs/images/app_dashboard_light.png)
+
+| Dark mode | Phone |
+|---|---|
+| ![Dark mode, BTC-USD](docs/images/app_dashboard_dark.png) | <img src="docs/images/app_mobile.png" width="260" alt="Phone layout"> |
+
+| Today's decision path and drivers | Decision tree and anomaly log |
+|---|---|
+| ![Decision path](docs/images/app_decision_path.png) | ![Tree and anomaly log](docs/images/app_tree_and_log.png) |
+
+Full page: [docs/images/app_full_page.png](docs/images/app_full_page.png)
+
 ## How to run
 
 ### Requirements
@@ -76,6 +90,30 @@ and the known limitations.
      and tested on the most recent 25% it never saw (AUC, precision, recall shown in the UI)
    - verdict: **High** (score ≥ 65), **Elevated** (≥ 50), **Normal**. 50 means "as likely as an average day"
    - a single tree is always fitted so every verdict comes with readable rules and today's decision path
+
+## Trained regime model
+
+A research-paper model, **RG-ResMoE** (Ye & Borde, arXiv:2608.12251), trained on 56 assets to
+forecast next-week volatility, with a gate that adapts to the market regime. In a 30-window
+walk-forward test (2019–2026, 103,593 unseen forecasts) it beats the naive forecast and a
+same-size neural network (IC 0.631 vs. 0.625), and its experts switch visibly during the
+COVID crash and the 2022 bear market. The full backtest trains in about 12 minutes on a laptop.
+
+![Regime gate timeline](docs/images/regime_gate_timeline.png)
+
+- **Our contribution, crisis-robust regime gating:** the paper's regime gate breaks in a crash;
+  log-scaled volatility inputs fix it (25/30 test windows improved, p < 0.001).
+  **[docs/CRISIS_ROBUST_GATING.md](docs/CRISIS_ROBUST_GATING.md)**
+- Design, benchmark and findings: **[docs/REGIME_MODEL.md](docs/REGIME_MODEL.md)**
+- All tables and figures: **[docs/REGIME_RESULTS.md](docs/REGIME_RESULTS.md)**
+
+```bash
+.venv/bin/python -m regime.train --quick   # 1-minute smoke test
+.venv/bin/python -m regime.train           # full walk-forward training (~12 min)
+.venv/bin/python -m regime.report          # regenerate figures and tables
+```
+
+Not shown in the app yet; that's the next step.
 
 ## Interface
 

@@ -1,0 +1,9 @@
+flowchart LR
+    T["Train<br/>423 days"] --> P1["gap<br/>5 days"] --> V["Validate<br/>71 days<br/>(early stopping)"] --> P2["gap<br/>5 days"] --> X["<b>Test</b><br/>63 days<br/>never seen"]
+    X -. "slide forward 63 days,<br/>retrain from scratch" .-> T
+    classDef train fill:#f3f2ee,stroke:#c3c2b7,color:#0b0b0b;
+    classDef gap fill:#fcfcfb,stroke:#c3c2b7,color:#898781,stroke-dasharray: 3 3;
+    classDef test fill:#2a78d6,stroke:#1c5cab,color:#ffffff;
+    class T,V train;
+    class P1,P2 gap;
+    class X test;
