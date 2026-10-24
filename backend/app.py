@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import math
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
@@ -35,7 +37,29 @@ def _clean(obj):
     return obj
 
 
+ANALYSIS_TTL = 600  # seconds; same freshness as the price cache
+_analysis_cache: dict = {}
+_analysis_lock = threading.Lock()
+
+
 def analyze(symbol: str, period: str, s: Settings, full: bool = True) -> dict:
+    """Cached wrapper: reloading a page or rescanning doesn't refit every model."""
+    key = (symbol.strip().upper(), period, tuple(sorted(s.__dict__.items())), full)
+    now = time.time()
+    with _analysis_lock:
+        hit = _analysis_cache.get(key)
+        if hit and now - hit[0] < ANALYSIS_TTL:
+            return hit[1]
+    result = _analyze(symbol, period, s, full)
+    with _analysis_lock:
+        if len(_analysis_cache) > 500:  # bound memory: drop expired entries
+            for k in [k for k, (t, _) in _analysis_cache.items() if now - t >= ANALYSIS_TTL]:
+                del _analysis_cache[k]
+        _analysis_cache[key] = (now, result)
+    return result
+
+
+def _analyze(symbol: str, period: str, s: Settings, full: bool = True) -> dict:
     df, info = load_prices(symbol, period)
     fx = detect(features(df, s.threshold), s)
     model = DecisionModel(s).run(fx)
@@ -131,7 +155,7 @@ def api_scan(
         except Exception as e:  # report per-symbol failures without failing the scan
             return {"symbol": sym, "error": str(e)}
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(one, tickers))
     return _clean({"results": results})
 

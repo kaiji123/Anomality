@@ -15,6 +15,7 @@ import pandas as pd
 from backend.data import load_prices
 
 from .config import CACHE_DIR, CRYPTO, STOCKS, X_COLS, Z_COLS, TrainConfig
+from .fileio import atomic_path
 
 ANNUAL = np.sqrt(252)
 
@@ -39,7 +40,8 @@ def load_closes(symbols: List[str], period: str, use_cache: bool = True) -> pd.D
     with ThreadPoolExecutor(max_workers=8) as pool:
         series: Dict[str, pd.Series] = {s: c for s, c in pool.map(one, symbols) if c is not None}
     closes = pd.DataFrame(series)
-    cache.write_bytes(pickle.dumps(closes))
+    with atomic_path(cache) as tmp:
+        tmp.write_bytes(pickle.dumps(closes))
     return closes
 
 

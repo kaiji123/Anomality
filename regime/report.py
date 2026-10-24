@@ -8,7 +8,6 @@ docs/images/regime_*.png and docs/REGIME_RESULTS.md.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Dict, List
 
 import matplotlib
@@ -19,7 +18,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from .config import MODEL_DIR, ROOT  # noqa: E402
+from .config import MODEL_DIR, ROOT, STRESS_PERIODS, VOL_FLOOR  # noqa: E402
 from .metrics import daily_ic, evaluate, qlike  # noqa: E402
 
 IMG = ROOT / "docs" / "images"
@@ -35,8 +34,8 @@ RUNS = {  # file suffix -> label
     "_paper": "RG-ResMoE (authors' settings)",
     "_paper_log": "RG-ResMoE (authors' settings + log inputs)",
 }
-FLOOR = 0.03  # same floor as TrainConfig.vol_floor; applied to every model's forecasts
-STRESS = {"covid_crash": ("2020-02-19", "2020-04-30"), "2022_bear_market": ("2022-01-03", "2022-10-31")}
+FLOOR = VOL_FLOOR  # applied to every model's forecasts before scoring
+STRESS = {k: (a, b) for k, (_, a, b) in STRESS_PERIODS.items()}
 SEGMENTS = {"all": "All assets", "stocks": "Stocks", "crypto": "Crypto",
             "covid_crash": "COVID crash (Feb–Apr 2020)", "2022_bear_market": "2022 bear market"}
 

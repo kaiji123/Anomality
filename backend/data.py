@@ -154,7 +154,9 @@ def load_prices(symbol: str, period: str = "5y", allow_synthetic: bool = True) -
         df, info = _fetch_yahoo(symbol, period)
     except DataError:
         raise
-    except Exception:
+    except (requests.RequestException, ValueError):
+        # Network down, timeout, HTTP error (incl. rate limits) or an unreadable response.
+        # Any other exception is a bug and should surface, not hide behind demo data.
         if not allow_synthetic:
             raise
         df, info = _synthetic(symbol, period)

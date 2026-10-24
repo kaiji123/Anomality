@@ -23,21 +23,18 @@ import json
 import shutil
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, List, Tuple
 
 import numpy as np
 import pandas as pd
 import torch
 
-from .config import LOG_COLS, MODEL_DIR, TARGET, X_COLS, Z_COLS, TrainConfig, paper_config
+from .config import LOG_COLS, MODEL_DIR, STRESS_PERIODS, TARGET, X_COLS, Z_COLS, TrainConfig, paper_config
+from .fileio import atomic_path
 from .dataset import build_panel
 from .metrics import evaluate
 from .model import PlainMLP, RGResMoE, build_moe, matched_width, n_params
 
-STRESS_PERIODS = {
-    "covid_crash": ("2020-02-19", "2020-04-30"),
-    "2022_bear_market": ("2022-01-03", "2022-10-31"),
-}
 
 
 # ---------------------------------------------------------------- data prep
@@ -244,10 +241,13 @@ def run(cfg: TrainConfig, save: bool = True, suffix: str = "", default_model: bo
         tag = f"_{suffix}" if suffix else ""
         final = train_final(panel, dates, cfg, moe_params, MODEL_DIR / f"rg_resmoe{tag}.pt")
         if default_model:
-            shutil.copy(MODEL_DIR / f"rg_resmoe{tag}.pt", MODEL_DIR / "rg_resmoe.pt")
+            with atomic_path(MODEL_DIR / "rg_resmoe.pt") as tmp:
+                shutil.copy(MODEL_DIR / f"rg_resmoe{tag}.pt", tmp)
         results["final_model"] = final
-        (MODEL_DIR / f"walkforward_results{tag}.json").write_text(json.dumps(results, indent=2, default=str))
-        oos.reset_index().to_csv(MODEL_DIR / f"walkforward_predictions{tag}.csv", index=False, float_format="%.5f")
+        with atomic_path(MODEL_DIR / f"walkforward_results{tag}.json") as tmp:
+            tmp.write_text(json.dumps(results, indent=2, default=str))
+        with atomic_path(MODEL_DIR / f"walkforward_predictions{tag}.csv") as tmp:
+            oos.reset_index().to_csv(tmp, index=False, float_format="%.5f")
         print(f"Saved models/rg_resmoe{tag}.pt, walkforward_results{tag}.json, walkforward_predictions{tag}.csv")
     print_summary(results)
     return results
@@ -273,7 +273,7 @@ def summarize(oos: pd.DataFrame, cfg: TrainConfig, window_log: List[dict], moe_p
 
     dates = oos.index.get_level_values("date")
     segments = {"all": block(), "stocks": block(~oos["is_crypto"]), "crypto": block(oos["is_crypto"])}
-    for name, (a, b) in STRESS_PERIODS.items():
+    for name, (_, a, b) in STRESS_PERIODS.items():
         mask = (dates >= a) & (dates <= b)
         if mask.sum() > 0:
             segments[name] = block(pd.Series(mask, index=oos.index))
@@ -320,8 +320,8 @@ def train_final(panel: pd.DataFrame, dates: pd.DatetimeIndex, cfg: TrainConfig, 
         "trained_from": str(dev[0].date()), "trained_through": str(dev[-1].date()),
         "x_cols": X_COLS, "z_cols": Z_COLS, "weights": moe_params, **ep,
     }
-    torch.save({"state_dict": model.state_dict(), "scaler": sc.to_dict(), "config": cfg.to_dict(), "meta": meta},
-               path)
+    with atomic_path(path) as tmp:
+        torch.save({"state_dict": model.state_dict(), "scaler": sc.to_dict(), "config": cfg.to_dict(), "meta": meta}, tmp)
     return meta
 
 

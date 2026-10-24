@@ -322,8 +322,6 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .hero-tile .big { font-size: 24px; font-weight: 700; margin: 4px 0 6px; }
 .hero-tile .note { font-size: 12px; color: var(--ink-2); }
 .hero-tile .note b { color: var(--ink); }
-.hero-chart-wrap { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 4px; }
-.hero-chart-wrap[hidden] { display: none; }
 
 /* regime weight bar (ordinal blue ramp) */
 .wbar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; margin-top: 6px; }
@@ -355,12 +353,6 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 
 /* asset-level regime card */
 .card.feature { border: 1.5px solid var(--accent); box-shadow: 0 0 0 4px rgba(42,120,214,0.08), var(--shadow); margin-bottom: 16px; }
-.feature-top { display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 12px; margin: 12px 0 14px; }
-.ftile { background: var(--surface-2); border-radius: 10px; padding: 12px; }
-.ftile .label { font-size: 12px; color: var(--ink-2); }
-.ftile .value { font-size: 26px; font-weight: 700; margin-top: 2px; }
-.ftile .value.log { color: var(--accent); }
-.ftile .note { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .feature-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
 .feature-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .feature-legend i.tri { width: 0; height: 0; border-radius: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--down); }
@@ -378,12 +370,11 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 
 @media (max-width: 1100px) {
   .hero-grid { grid-template-columns: 1fr 1fr; }
-  .feature-top { grid-template-columns: 1fr 1fr; }
   .feature-bottom { grid-template-columns: 1fr; }
 }
 @media (max-width: 800px) {
   .hero { padding: 14px 16px; }
-  .hero-grid, .feature-top { grid-template-columns: 1fr; }
+  .hero-grid { grid-template-columns: 1fr; }
 }
 
 /* ---------- plain-language forecast view ---------- */
@@ -480,12 +471,6 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .ms-note b { color: var(--ink); }
 .fh-scale { grid-column: 1 / -1; max-width: 560px; margin-top: 4px; }
 .label-sm { font-size: 11px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
-.ms-legend { margin-top: 8px; }
-.ms-legend summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--accent); }
-.ms-legend ul { list-style: none; margin: 8px 0 0; padding: 0; }
-.ms-legend li { display: grid; grid-template-columns: 82px 1fr; gap: 8px; padding: 8px 6px; border-top: 1px solid var(--grid); border-radius: 6px; }
-.ms-legend li.now { background: var(--hover); }
-.ms-legend .mood-sm { justify-self: start; align-self: start; }
 .lg-top { font-size: 12px; color: var(--ink-2); }
 .lg-top b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .lg-now { color: var(--accent); font-weight: 700; }
@@ -494,14 +479,6 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .lg-stat b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .lg-foot { font-size: 11px; color: var(--muted); margin: 6px 0 0; }
 .link-btn.small { font-size: 12px; margin-top: 8px; }
-.ms-legend.wide { margin-top: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0 14px; }
-.ms-legend.wide:not([open]) { display: none; }
-.ms-legend.wide summary { padding: 10px 0; }
-.ms-legend.wide ul { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0; }
-.ms-legend.wide li { grid-template-columns: 1fr; border-top: 0; border: 1px solid var(--grid); padding: 10px; }
-.ms-legend.wide .lg-foot { padding-bottom: 10px; }
-@media (max-width: 1100px) { .ms-legend.wide ul { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 800px) { .ms-legend.wide ul { grid-template-columns: 1fr; } }
 
 /* levels modal */
 .modal { border: 1px solid var(--border); border-radius: 14px; padding: 0; width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 48px);

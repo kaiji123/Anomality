@@ -23,6 +23,15 @@ CRYPTO: List[str] = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "DOGE-USD", "AD
 X_COLS: List[str] = ["rv5", "rv20", "rv60", "cum5", "cum20", "rsi14"] + [f"lag{k}" for k in range(10)]
 Z_COLS: List[str] = ["mkt_vol", "idio_vol"]
 TARGET = "y"
+
+# Shared constants. Everything else imports these instead of keeping its own copy.
+VOL_FLOOR = 0.03  # forecasts below 3% annualized vol are clamped (vol can't be negative)
+WEEK = (5 / 252) ** 0.5  # annualized vol -> typical one-week move (1 std dev)
+STRESS_PERIODS = {  # key -> (label, start, end)
+    "covid_crash": ("COVID crash", "2020-02-19", "2020-04-30"),
+    "2022_bear_market": ("2022 bear market", "2022-01-03", "2022-10-31"),
+}
+CALM_REFERENCE = ("Calm 2019", "2019-06-01", "2020-01-31")
 # Volatility inputs that can be log-transformed before scaling (keeps crisis spikes in range).
 LOG_COLS: List[str] = ["rv5", "rv20", "rv60", "mkt_vol", "idio_vol"]
 
@@ -56,7 +65,7 @@ class TrainConfig:
     check_every: int = 1  # validate every N epochs
     patience: int = 150  # stop after this many validations without improvement
     scale_target: bool = True  # standardise y during training (the authors train on raw y)
-    vol_floor: float = 0.03  # forecasts below 3% annualized vol are clamped (vol can't be negative)
+    vol_floor: float = VOL_FLOOR
     seeds: List[int] = field(default_factory=lambda: [0, 1, 2])
     device: str = "cpu"
     max_windows: int = 0  # 0 = all windows; >0 = only the most recent N (quick runs)

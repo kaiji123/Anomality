@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py39"
+extend-exclude = [".venv", "models"]
+
+[tool.ruff.lint]
+# Pyflakes (undefined names, unused imports/variables) and syntax errors: real bugs, no style churn.
+select = ["F", "E9"]

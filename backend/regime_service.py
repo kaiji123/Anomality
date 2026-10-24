@@ -9,6 +9,7 @@ comes from the final models, trained on the most recent 504 days.
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
 from pathlib import Path
@@ -18,14 +19,17 @@ import numpy as np
 import pandas as pd
 import torch
 
-from regime.config import MODEL_DIR, X_COLS, Z_COLS, TrainConfig
+from regime.config import CALM_REFERENCE, MODEL_DIR, STRESS_PERIODS as _PERIODS, VOL_FLOOR, WEEK as _WEEK, X_COLS, Z_COLS, TrainConfig
+from regime.fileio import atomic_path
+from regime.metrics import qlike
 from regime.dataset import build_panel
 from regime.model import build_moe
 from regime.train import Scaler
 
-FLOOR = 0.03  # forecasts below 3% annualized vol are clamped
+FLOOR = VOL_FLOOR
 SURPRISE = 2.0  # realized vol at least 2x the forecast = trained anomaly
-STRESS_PERIODS = {"COVID crash": ("2020-02-19", "2020-04-30"), "2022 bear market": ("2022-01-03", "2022-10-31")}
+STRESS_PERIODS = {label: (start, end) for label, start, end in _PERIODS.values()}  # label -> (start, end)
+COVID = STRESS_PERIODS["COVID crash"]
 REGIME_NAMES = ["Calm", "Normal", "Elevated", "Stress"]  # experts ranked by market vol when dominant
 
 _lock = threading.Lock()
@@ -37,7 +41,7 @@ class RegimeUnavailable(Exception):
 
 
 def _load_model(path: Path):
-    ck = torch.load(path, map_location="cpu", weights_only=False)
+    ck = torch.load(path, map_location="cpu", weights_only=True)  # tensors and plain data only, no pickled code
     cfg = TrainConfig(**{k: v for k, v in ck["config"].items() if k in TrainConfig.__dataclass_fields__})
     model = build_moe(len(X_COLS), len(Z_COLS), cfg)
     model.load_state_dict(ck["state_dict"])
@@ -63,8 +67,6 @@ def _load_preds(name: str) -> Optional[pd.DataFrame]:
         p = pd.read_csv(compact, parse_dates=["date"])
     else:
         return None
-    pis = [c for c in p.columns if c.startswith("pi")]
-    p["top_w"] = p[pis].max(axis=1)  # gate concentration; doesn't depend on expert order
     return p.set_index(["symbol", "date"]).sort_index()
 
 
@@ -74,7 +76,8 @@ def export_serving() -> None:
         p = _load_preds(name)
         if p is not None:
             out = p.reset_index()[SERVING_COLS]
-            out.to_csv(MODEL_DIR / f"serving_{name}.csv.gz", index=False, float_format="%.4f", compression="gzip")
+            with atomic_path(MODEL_DIR / f"serving_{name}.csv.gz") as tmp:
+                out.to_csv(tmp, index=False, float_format="%.4f", compression="gzip")
 
 
 @torch.no_grad()
@@ -132,9 +135,7 @@ def _gate_input_z(m: dict, mkt_vol: float) -> float:
 
 
 def _metrics(y: np.ndarray, f: np.ndarray) -> dict:
-    ratio = np.maximum(y, 1e-4) ** 2 / np.maximum(f, 1e-3) ** 2
-    return {"rmse": round(float(np.sqrt(np.mean((y - f) ** 2))), 4),
-            "qlike": round(float(np.mean(ratio - np.log(ratio) - 1)), 4)}
+    return {"rmse": round(float(np.sqrt(np.mean((y - f) ** 2))), 4), "qlike": round(qlike(y, f), 4)}
 
 
 def regime_for(symbol: str) -> dict:
@@ -146,7 +147,7 @@ def regime_for(symbol: str) -> dict:
     rows = panel.xs(symbol, level="symbol", drop_level=False).sort_index()
     latest = rows.iloc[[-1]]
     f_log, pi_log = _predict(st["log"], latest)
-    f_raw, pi_raw = _predict(st["raw"], latest)
+    f_raw, _ = _predict(st["raw"], latest)
     mkt_vol = float(latest["mkt_vol"].iloc[0])
     names = st["names"]
     weights = pi_log[0]
@@ -162,7 +163,6 @@ def regime_for(symbol: str) -> dict:
                              "log": round(_gate_input_z(st["log"], mkt_vol), 2)},
             "weights": [{"expert": i, "name": names[i], "weight": round(float(w), 4)} for i, w in enumerate(weights)],
             "regime": names[int(weights.argmax())],
-            "top_weight": {"log": round(float(pi_log[0].max()), 4), "raw": round(float(pi_raw[0].max()), 4)},
         },
         "model": {
             "trained_from": st["log"]["meta"]["trained_from"],
@@ -183,8 +183,6 @@ def regime_for(symbol: str) -> dict:
             "pred_log": a["pred"].round(4).tolist(),
             "pred_raw": b["pred"].round(4).tolist(),
             "naive": a["pred_naive"].round(4).tolist(),
-            "top_w_log": a["top_w"].round(4).tolist(),
-            "top_w_raw": b["top_w"].round(4).tolist(),
             "market_vol": a["mkt_vol"].round(4).tolist(),
             "surprises": [
                 {"date": str(d.date()), "actual": round(float(y), 4), "forecast": round(float(f), 4),
@@ -201,9 +199,7 @@ def regime_for(symbol: str) -> dict:
             if m.sum() >= 5:
                 crises[name] = {"log": _metrics(y[m], a["pred"].to_numpy()[m]),
                                 "raw": _metrics(y[m], b["pred"].to_numpy()[m]),
-                                "naive": _metrics(y[m], np.maximum(a["pred_naive"].to_numpy()[m], FLOOR)),
-                                "top_w_log": round(float(a["top_w"][m].mean()), 3),
-                                "top_w_raw": round(float(b["top_w"][m].mean()), 3)}
+                                "naive": _metrics(y[m], np.maximum(a["pred_naive"].to_numpy()[m], FLOOR))}
         out["metrics"] = {"all": mets, "crises": crises}
     return out
 
@@ -275,8 +271,9 @@ def market_overview() -> dict:
             m = (tl_log.index >= s) & (tl_log.index <= e)
             crisis[name] = {"agree_log": round(float(tl_log["agree"][m].mean()), 3),
                             "agree_raw": round(float(tl_raw["agree"][m].mean()), 3)}
-        calm = (tl_log.index >= "2019-06-01") & (tl_log.index <= "2020-01-31")
-        crisis["Calm 2019"] = {"agree_log": round(float(tl_log["agree"][calm].mean()), 3),
+        calm_label, calm_start, calm_end = CALM_REFERENCE
+        calm = (tl_log.index >= calm_start) & (tl_log.index <= calm_end)
+        crisis[calm_label] = {"agree_log": round(float(tl_log["agree"][calm].mean()), 3),
                                "agree_raw": round(float(tl_raw["agree"][calm].mean()), 3)}
         out["crisis_agreement"] = crisis
     with _lock:
@@ -285,7 +282,7 @@ def market_overview() -> dict:
 
 
 # ---------------------------------------------------------------- plain-language view for users
-WEEK = float(np.sqrt(5 / 252))  # annualized vol -> typical one-week move (1 std dev)
+WEEK = _WEEK
 MOODS = [(0.35, "Calm", "Quieter than usual. Prices tend to move in small steps."),
          (0.70, "Normal", "A typical week, with ordinary ups and downs."),
          (0.90, "Choppy", "Busier than usual. Bigger daily swings, and news moves prices more."),
@@ -351,13 +348,13 @@ def track_record() -> Optional[dict]:
     naive = a["pred_naive"].clip(lower=FLOOR)
     miss = lambda f: (np.abs(f - a["y"]) * WEEK * 100)
     m_ours, m_orig, m_simple = miss(a["pred"]), miss(b["pred"]), miss(naive)
-    res = __import__("json").loads((MODEL_DIR / "walkforward_results_paper_log.json").read_text())
+    res = json.loads((MODEL_DIR / "walkforward_results_paper_log.json").read_text())
     wins_simple = wins_orig = 0
     for w in res["windows"]:
         m = (a["date"] >= w["test_start"]) & (a["date"] <= w["test_end"])
         wins_simple += m_ours[m].mean() < m_simple[m].mean()
         wins_orig += m_ours[m].mean() < m_orig[m].mean()
-    cov = (a["date"] >= "2020-02-19") & (a["date"] <= "2020-04-30")
+    cov = (a["date"] >= COVID[0]) & (a["date"] <= COVID[1])
     rk = a.groupby("date")["pred"].rank(pct=True)
     out = {
         "periods": len(res["windows"]),
@@ -385,7 +382,10 @@ def plain_market() -> dict:
     stock_fc = [v["forecast"] for s, v in assets.items() if s not in crypto]
     crypto_fc = [v["forecast"] for s, v in assets.items() if s in crypto]
     avg_now = float(np.mean(stock_fc))
-    out = {"date": m["date"], "model": m["model"], "track": track_record(), "technical": m}
+    out = {"date": m["date"], "model": m["model"], "track": track_record(), "technical": m,
+           "periods": {label: {"start": a, "end": b} for label, (a, b) in STRESS_PERIODS.items()}}
+    for v in assets.values():
+        v["move"] = weekly(v["forecast"])
     pl = st["preds_log"]
     if pl is not None:
         hist = pl[~pl["is_crypto"]].groupby(level="date")[["pred", "y"]].mean()
@@ -469,7 +469,7 @@ def plain_asset(symbol: str) -> dict:
         y = np.asarray(h["actual"], dtype=float)
         miss = lambda f: float(np.nanmean(np.abs(np.asarray(f, dtype=float) - y)) * WEEK * 100)
         dates = np.array(h["date"])
-        cov = (dates >= "2020-02-19") & (dates <= "2020-04-30")
+        cov = (dates >= COVID[0]) & (dates <= COVID[1])
         missc = lambda f: float(np.nanmean(np.abs(np.asarray(f, dtype=float)[cov] - y[cov])) * WEEK * 100) if cov.any() else None
         naive = np.maximum(np.asarray(h["naive"], dtype=float), FLOOR)
         out["record"] = {"ours": round(miss(h["pred_log"]), 2), "simple": round(miss(naive), 2),

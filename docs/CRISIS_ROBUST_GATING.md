@@ -98,6 +98,48 @@ the gate's regime variables. Returns, RSI and the forecast target are unchanged,
 rest of the architecture. In code it's one setting, `log_vol_inputs=True`
 (`regime/config.py`), applied before standardisation in `regime/train.py`.
 
+### Step by step
+
+For every row of data (one asset on one day), in `Scaler._inputs` (`regime/train.py`):
+
+```python
+LOG_COLS = ["rv5", "rv20", "rv60", "mkt_vol", "idio_vol"]
+df[LOG_COLS] = np.log(df[LOG_COLS].clip(lower=1e-4))
+```
+
+1. **Pick the five volatility columns:** 5-, 20- and 60-day realized volatility, market
+   volatility and stock-specific volatility (all annualized, so 0.20 means 20%).
+2. **Clip at 0.0001** (0.01% annualized) so a value of exactly zero can't produce log(0) = −∞.
+   Real volatility is essentially never this low, so the clip almost never triggers.
+3. **Take the natural logarithm** (base e): 0.20 becomes ln(0.20) = −1.61.
+4. **Standardise as before:** subtract the mean and divide by the standard deviation, both
+   computed on the **training window only** (never on test data), so each input is centred
+   around 0. The model then sees "how many standard deviations from normal" on the log scale.
+
+**Worked example: the COVID peak** (market volatility 102% on 27 March 2020; the training
+window before it averaged 15.8% and peaked at 34.6%):
+
+| | Raw scale (paper) | Log scale (ours) |
+|---|---|---|
+| Value the model receives | 1.02 | ln(1.02) = 0.02 |
+| Highest value seen in training | 2.6 std devs above average | 1.9 std devs |
+| COVID peak | **11.7 std devs** above average | **4.3 std devs** |
+
+On the raw scale the crash was more than 4× beyond anything the model had trained on; on the
+log scale it's still extreme, but close enough to familiar territory that the gate responds
+sensibly instead of extrapolating.
+
+### What is *not* log-scaled, and why
+
+| Input | Why it stays as it is |
+|---|---|
+| Daily returns (last 10 days) and 5-/20-day cumulative returns | They can be negative, and the log of a negative number is undefined. They're also already roughly symmetric around zero, so they don't have a long one-sided tail to tame |
+| RSI | A bounded score between 0 and 1 with no long tail |
+| The forecast target (next-5-day volatility) | Kept on the raw scale so the model's output is a normal volatility number (0.25 = 25%) and the metrics stay directly comparable with the paper |
+
+Only volatility is always positive and prone to huge spikes, which is exactly what a
+logarithm handles well.
+
 ```mermaid
 flowchart TB
     P["Daily prices<br/>56 assets"] --> V["Volatility inputs<br/>5d · 20d · 60d vol<br/>market vol · stock-specific vol"]

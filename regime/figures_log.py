@@ -14,12 +14,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from .config import MODEL_DIR, TrainConfig  # noqa: E402
+from .config import MODEL_DIR, VOL_FLOOR, TrainConfig  # noqa: E402
 from .dataset import build_panel  # noqa: E402
 from .metrics import daily_ic  # noqa: E402
 from .report import C, IMG, date_axis, style  # noqa: E402
 
-FLOOR = 0.03
+FLOOR = VOL_FLOOR
 RAW, LOG = C["orange"], C["blue"]  # raw inputs = paper; log inputs = ours
 DIV_POS, DIV_NEG = "#2a78d6", "#e34948"  # diverging pair (blue = better, red = worse)
 

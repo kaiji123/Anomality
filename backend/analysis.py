@@ -170,7 +170,7 @@ class DecisionModel:
             max_depth=self.s.depth + 1,
             min_samples_leaf=max(10, int(n * 0.02)),
             class_weight="balanced",
-            n_jobs=2,
+            n_jobs=1,  # parallelism comes from the scan's worker pool; nesting oversubscribed the CPU
             random_state=0,
         )
 

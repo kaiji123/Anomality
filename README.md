@@ -150,6 +150,23 @@ uvicorn backend.app:app --port 8000
 
 </details>
 
+## Development
+
+```bash
+pip install -r requirements-dev.txt     # pinned app dependencies + pytest, httpx, ruff
+pytest                                  # 17 offline tests: metrics, data cleaning, walk-forward splits, report logic
+pytest --run-network                    # + live end-to-end API tests against Yahoo Finance
+ruff check .                            # lint for real bugs (undefined names, unused imports)
+
+# Browser smoke test (with the app running on :8000): 14 checks on desktop and phone
+cd scripts && npm install && npx playwright install chromium && node smoke_test.js
+```
+
+Tests and lint run on every push via GitHub Actions (`.github/workflows/tests.yml`). Shared
+constants (the forecast floor, the weekly-move factor, the crisis periods) live once in
+`regime/config.py`, and training outputs are written atomically so a crash never leaves a
+half-written model file.
+
 ## Also inside: classic anomaly detection
 
 Below the anomaly report, every asset also gets the classic detection toolkit: z-score and

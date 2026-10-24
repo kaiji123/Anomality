@@ -74,7 +74,6 @@
   }
 
   // ---------- regime model helpers ----------
-  const WEEK = Math.sqrt(5 / 252);
   function moodBadge(s) {
     const m = state.market?.technical?.assets?.[s]?.mood;
     const icon = { Calm: "●", Normal: "◆", Choppy: "▲", Stormy: "⚠" }[m];
@@ -84,7 +83,7 @@
   function volPill(s) {
     const a = state.market?.technical?.assets?.[s];
     if (!a) return "";
-    return `<span class="vol-pill" title="Expected move over the next week (crash-tested forecast)">±${(a.forecast * WEEK * 100).toFixed(1)}% this week</span>`;
+    return `<span class="vol-pill" title="Expected move over the next week (crash-tested forecast)">±${a.move.toFixed(1)}% this week</span>`;
   }
   const REG_ORDER = ["Calm", "Normal", "Elevated", "Stress"];
   function weightBar(weights) {
@@ -736,8 +735,7 @@
     ], {
       ...plotBase(), margin: { l: 44, r: 8, t: 18, b: 24 },
       xaxis: axis({ type: "date" }), yaxis: axis({ ticksuffix: "%" }),
-      shapes: [{ type: "rect", xref: "x", yref: "paper", x0: "2020-02-19", x1: "2020-04-30", y0: 0, y1: 1, fillcolor: css("--grid"), opacity: 0.5, line: { width: 0 }, layer: "below" }],
-      annotations: [{ xref: "x", yref: "paper", x: "2020-03-25", y: 1, text: "2020 crash", showarrow: false, yanchor: "bottom", font: { size: 10, color: css("--ink-2") } }],
+      ...crisisShape(),
     }, { ...plotCfg, displayModeBar: false });
   }
 
@@ -748,6 +746,17 @@
     });
   }
 
+  // Shaded crisis band for charts, from the API's single definition of the period.
+  function crisisShape() {
+    const p = state.market?.periods?.["COVID crash"];
+    if (!p) return { shapes: [], annotations: [] };
+    const mid = new Date((new Date(p.start).getTime() + new Date(p.end).getTime()) / 2).toISOString().slice(0, 10);
+    return {
+      shapes: [{ type: "rect", xref: "x", yref: "paper", x0: p.start, x1: p.end, y0: 0, y1: 1, fillcolor: css("--grid"), opacity: 0.5, line: { width: 0 }, layer: "below" }],
+      annotations: [{ xref: "x", yref: "paper", x: mid, y: 1, text: "2020 crash", showarrow: false, yanchor: "bottom", font: { size: 10, color: css("--ink-2") } }],
+    };
+  }
+
   function drawHeroChart(h) {
     Plotly.react("hero-chart", [
       { type: "scatter", mode: "lines", x: h.date, y: h.actual, line: { color: css("--ink-2"), width: 1 }, opacity: 0.6, hovertemplate: "Actual ±%{y:.1f}%<extra></extra>" },
@@ -756,8 +765,7 @@
       ...plotBase(), margin: { l: 44, r: 8, t: 18, b: 24 },
       xaxis: axis({ type: "date" }),
       yaxis: axis({ ticksuffix: "%", tickprefix: "±", rangemode: "tozero" }),
-      shapes: [{ type: "rect", xref: "x", yref: "paper", x0: "2020-02-19", x1: "2020-04-30", y0: 0, y1: 1, fillcolor: css("--grid"), opacity: 0.5, line: { width: 0 }, layer: "below" }],
-      annotations: [{ xref: "x", yref: "paper", x: "2020-03-25", y: 1, text: "2020 crash", showarrow: false, yanchor: "bottom", font: { size: 10, color: css("--ink-2") } }],
+      ...crisisShape(),
     }, { ...plotCfg, displayModeBar: false });
   }
 

@@ -1,0 +1,6 @@
+{
+  "name": "anomality-smoke-test",
+  "private": true,
+  "description": "Browser smoke test for the running app: npm install && npx playwright install chromium && node smoke_test.js",
+  "devDependencies": { "playwright": "1.48.2" }
+}
