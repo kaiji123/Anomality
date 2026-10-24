@@ -26,6 +26,12 @@
     regimeRange: "All",
     heroChart: false,
     showOriginal: false,
+    decision: null,      // /api/decision/portfolio (decision layer)
+    decMap: {},          // symbol -> today's position
+    decAsset: {},        // symbol -> /api/decision/{symbol}
+    decPeriod: "all",
+    decPrev: false,
+    ruleTry: null,       // slider value; starts at today's storminess
   };
 
   const VERDICT = {
@@ -85,6 +91,11 @@
     if (!a) return "";
     return `<span class="vol-pill" title="Expected move over the next week (crash-tested forecast)">±${a.move.toFixed(1)}% this week</span>`;
   }
+  function posPill(s) {
+    const d = state.decMap[s];
+    if (!d || d.level === "Full") return "";
+    return ` <span class="pos sm ${d.level}" title="Decision rule: ${d.level === "Half" ? "half invested" : "in cash"}, because the market mood is Stormy">${d.level === "Half" ? "◐" : "○"} ${d.level}</span>`;
+  }
   const REG_ORDER = ["Calm", "Normal", "Elevated", "Stress"];
   function weightBar(weights) {
     const ws = [...weights].sort((a, b) => REG_ORDER.indexOf(a.name) - REG_ORDER.indexOf(b.name));
@@ -139,7 +150,7 @@
       const up = r.change_pct >= 0;
       return `<li data-sym="${esc(s)}" class="${s === state.selected ? "selected" : ""}">
         <div><div class="wl-sym">${esc(s)}${r.anomaly_today ? ` <span title="Anomaly today: ${esc(r.anomaly_today)}" style="color:var(--other)">✦</span>` : ""}</div>
-          <div class="wl-name" title="${esc(r.name)}">${esc(r.name)}</div>${volPill(s)}</div>
+          <div class="wl-name" title="${esc(r.name)}">${esc(r.name)}</div>${volPill(s)}${posPill(s)}</div>
         ${sparkline(r.spark, up)}
         <div class="wl-right"><div>${money(r.price, r.currency)}</div>
           <div class="${up ? "up" : "down"}">${signed(r.change_pct)}%</div>
@@ -182,6 +193,7 @@
     renderWatchlist();
     const token = ++state.detailToken;
     loadRegime(sym);
+    loadDecision(sym);
     const main = $("#detail");
     if (!state.detail || state.detail.summary.symbol.toUpperCase() !== sym) {
       main.innerHTML = `<div class="loading"><div class="spinner"></div>Analyzing ${esc(sym)}: fetching prices, detecting anomalies, training the model…</div>`;
@@ -237,6 +249,7 @@
       </div>
       <div class="asset-sub">${esc(s.exchange)} · ${esc(s.type)} · last close ${esc(s.last_date)}${s.session_in_progress ? " · today's session is still open and not included yet" : ""}</div>
       <div id="regime-card"></div>
+      <div id="decision-card"></div>
       ${s.synthetic ? `<div class="banner">⚠ Live data could not be fetched, so this shows <b>synthetic demo data</b>. Check your internet connection.</div>` : ""}
 
       <div class="grid top">
@@ -324,6 +337,7 @@
     renderTable();
     bindDetailEvents();
     renderRegimeCard(s.symbol.toUpperCase());
+    renderDecisionCard(s.symbol.toUpperCase());
   }
 
   function plotBase() {
@@ -907,6 +921,305 @@
     if (state.selected === sym) renderRegimeCard(sym);
   }
 
+  // ---------- decision layer: the regime model's market mood sets the position ----------
+  // Rule: hold every asset at half when the market mood is Stormy (this week's market forecast is
+  // busier than 90% of earlier days), fully invested otherwise.
+  const DECISION_DOCS = "https://github.com/kaiji123/Anomality/blob/master/docs/DECISION_LAYER.md";
+  const POS = {
+    Full: { icon: "●", word: "Fully invested" },
+    Half: { icon: "◐", word: "Half invested" },
+    Cash: { icon: "○", word: "In cash" },
+  };
+  const LEVEL_ORDER = ["Full", "Half", "Cash"];
+  const SYS_SHORT = { mood_rule: "Mood rule", buy_and_hold: "Buy and hold", surprise_rule: "Previous rule (surprise)" };
+  const sysColor = (n) => ({ mood_rule: css("--accent"), buy_and_hold: css("--ink-2"), surprise_rule: css("--alt") }[n]);
+  const posChip = (level, big = false) => (level ? `<span class="pos ${level}${big ? " lg" : ""}">${POS[level].icon} ${big ? POS[level].word : level}</span>` : "");
+  const growth = (v) => (v == null ? "–" : `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(0)}%`);
+  const drop = (v) => (v == null ? "–" : `−${Math.abs(v * 100).toFixed(1)}%`); // drawdowns are ≤ 0
+  const fmtDate = (s) => { const [y, m, d] = s.split("-").map(Number); return `${MONTHS[m - 1]} ${d}, ${y}`; };
+  const MOOD_CUTS = [0.35, 0.70]; // Calm | Normal | Choppy; Stormy starts at rule.stormy_pct
+  const moodOfPct = (p, rule) => (p < MOOD_CUTS[0] ? "Calm" : p < MOOD_CUTS[1] ? "Normal" : p < rule.stormy_pct ? "Choppy" : "Stormy");
+  const levelForPct = (p, rule) => (p >= rule.stormy_pct ? (rule.cut_to === 0 ? "Cash" : "Half") : "Full");
+
+  // The rule as a scale: market storminess 0–100% with the four mood bands, and the position below.
+  function stormMeter(pct, rule) {
+    const edges = [0, MOOD_CUTS[0], MOOD_CUTS[1], rule.stormy_pct, 1];
+    const names = ["Calm", "Normal", "Choppy", "Stormy"];
+    const w = (i) => (edges[i + 1] - edges[i]) * 100;
+    const cut = levelForPct(1, rule);
+    const marker = pct == null ? "" : `<span class="sm-marker" style="left:${Math.min(99.5, Math.max(0.5, pct * 100))}%"><b>${Math.round(pct * 100)}%</b></span>`;
+    return `<div class="smeter" role="img" aria-label="Market storminess ${pct == null ? "unknown" : Math.round(pct * 100) + "%"}. Below ${Math.round(rule.stormy_pct * 100)}% the rule is fully invested; from ${Math.round(rule.stormy_pct * 100)}% (Stormy) it holds ${cut === "Cash" ? "cash" : "half"}.">
+      <div class="sm-row">${names.map((n, i) => `<span class="sm-seg mood-sm ${n}" style="width:${w(i)}%">${w(i) >= 15 ? `${MOOD_ICON[n]} ${n}` : MOOD_ICON[n]}</span>`).join("")}</div>
+      <div class="sm-row pos-row"><span class="sm-pos Full" style="width:${rule.stormy_pct * 100}%">${POS.Full.icon} Fully invested</span><span class="sm-pos ${cut}" style="width:${(1 - rule.stormy_pct) * 100}%" title="${POS[cut].word} when Stormy">${POS[cut].icon}</span></div>
+      ${marker}
+      <div class="sm-axis">${edges.slice(0, -1).map((e) => `<span style="left:${e * 100}%">${Math.round(e * 100)}%</span>`).join("")}</div>
+      <div class="sm-key"><span>${posChip("Full")} below ${Math.round(rule.stormy_pct * 100)}%</span><span>${posChip(cut)} from ${Math.round(rule.stormy_pct * 100)}% <span class="mood-sm Stormy">${MOOD_ICON.Stormy} Stormy</span></span></div>
+    </div>`;
+  }
+
+  async function loadDecisionPortfolio() {
+    try {
+      const p = await api("/api/decision/portfolio");
+      state.decision = p;
+      state.decMap = Object.fromEntries(p.today.assets.map((a) => [a.symbol, a]));
+      if (state.ruleTry == null) state.ruleTry = p.today.storm ?? 0.5;
+      renderDecisionBand(p);
+      renderWatchlist();
+    } catch (e) {
+      console.warn("Decision layer unavailable:", e.message);
+    }
+  }
+
+  function renderDecisionBand(p) {
+    const el = $("#decision-hero");
+    const t = p.today, rule = p.rule, S = p.systems, mk = p.market;
+    const rr = S.mood_rule.all, bh = S.buy_and_hold.all;
+    const covid = Object.keys(S.mood_rule).find((k) => /covid/i.test(k));
+    const rc = covid && S.mood_rule[covid], bc = covid && S.buy_and_hold[covid];
+    const moreGrowth = rr.net_return >= bh.net_return, smallerDrop = rr.max_drawdown >= bh.max_drawdown;
+    const verdict = moreGrowth && smallerDrop ? "More growth and smaller drops."
+      : smallerDrop ? "Smaller drops, smaller gains." : moreGrowth ? "More growth, deeper drops." : "No better than buying and holding.";
+    const ddDiff = Math.round(Math.abs(1 - rr.max_drawdown / bh.max_drawdown) * 100);
+    const cutWord = rule.cut_to === 0 ? "in cash" : "at half";
+    el.innerHTML = `
+      <div class="hero-head">
+        <span class="core-badge dec">⇄ Decision layer</span>
+        <h2>What to do about it</h2>
+        <span class="muted">One simple rule driven by the regime model's market mood: ${cutWord} when it's Stormy, fully invested otherwise · decisions to ${esc(fmtDate(t.date))}</span>
+      </div>
+      <div class="dec-grid">
+        <div class="hero-tile">
+          <div class="label">Today's call</div>
+          <div class="dec-now">${posChip(t.level, true)}</div>
+          <div class="note" style="margin-top:6px">for all ${t.assets.length} assets, since <b>${esc(fmtDate(t.since))}</b> (${t.days_in_position} trading days)</div>
+          <p class="note dec-why">${esc(t.text)}</p>
+          <div class="note muted-note">Since ${esc(p.since.slice(0, 4))} the rule was ${cutWord} on ${Math.round(mk.time_half * 100)}% of days, with ${mk.switches.length} switches in total.</div>
+        </div>
+        <div class="hero-tile">
+          <div class="label">How the rule decides</div>
+          <p class="note" style="margin:4px 0 0">It asks one question each day: <b>is the market mood Stormy?</b> That's when this week's market forecast is busier than ${Math.round(rule.stormy_pct * 100)}% of all earlier days, the same mood the anomaly report shows above.</p>
+          <div id="rule-try"></div>
+          <label class="try"><span>Try it: this week's forecast is busier than</span><input type="range" id="rule-slider" min="0" max="1" step="0.01" value="${state.ruleTry}" aria-label="Market storminess"><output id="rule-slider-out"></output><span>of past days</span></label>
+          <div class="try-result" id="rule-result" aria-live="polite"></div>
+          <div class="note muted-note">It only compares with days before each decision, so it never peeks ahead. Trades happen the next trading day and cost ${(rule.cost_bps / 100).toFixed(2)}% each.</div>
+        </div>
+        <div class="hero-tile">
+          <div class="label">Tested since ${esc(p.since.slice(0, 4))}, ${p.assets} assets</div>
+          <div class="duel">
+            <div><span class="dv">${growth(rr.net_return)}</span><span class="dl">growth with the rule</span><span class="dl2">buy and hold: <b>${growth(bh.net_return)}</b></span></div>
+            <div><span class="dv">${drop(rr.max_drawdown)}</span><span class="dl">worst drop with the rule</span><span class="dl2">buy and hold: <b>${drop(bh.max_drawdown)}</b></span></div>
+          </div>
+          ${rc && bc ? `<div class="dec-crash">In the COVID crash it fell <b>${drop(rc.max_drawdown)}</b> at worst, vs. <b>${drop(bc.max_drawdown)}</b> for buy and hold.</div>` : ""}
+          <div class="note"><b>${verdict}</b> The worst fall was ${ddDiff}% ${smallerDrop ? "shallower" : "deeper"}, with ${rr.sharpe >= bh.sharpe ? "more" : "less"} return per unit of risk (${rr.sharpe.toFixed(2)} vs. ${bh.sharpe.toFixed(2)}). It acts in only the stormiest weeks, so its edge comes from a handful of storms. Scored only on forecasts the model never saw, after trading costs.</div>
+        </div>
+      </div>
+      <div class="dec-bt">
+        <div class="dec-bt-head">
+          <div>
+            <h3>Backtest: $100 spread equally over all ${p.assets} assets</h3>
+            <div class="feature-legend">
+              <span><i style="background:var(--accent)"></i>Mood rule</span>
+              <span><i style="background:var(--ink-2)"></i>Buy and hold</span>
+              <span><i class="blk storm"></i>Rule ${cutWord} (Stormy)</span>
+              <label class="cmp alt"><input type="checkbox" id="dec-prev" ${state.decPrev ? "checked" : ""}> <i class="dash"></i>Previous rule (surprise)</label>
+            </div>
+          </div>
+          <div class="seg" id="dec-period">${["all", ...Object.keys(S.mood_rule).filter((k) => k !== "all" && k !== "label")].map((k) => `<button data-p="${esc(k)}" class="${k === state.decPeriod ? "active" : ""}">${k === "all" ? "All" : esc(k)}</button>`).join("")}</div>
+        </div>
+        <div class="dec-bt-grid">
+          <div><div id="dec-chart" style="height:360px"></div></div>
+          <div id="dec-table"></div>
+        </div>
+        <p class="small muted dec-foot">Each day the rule sets one position for every asset from that day's mood; it's traded at the next day's close (no peeking ahead), with ${(rule.cost_bps / 100).toFixed(2)}% trading costs, ${esc(p.since)} to ${esc(p.through)}. Past results don't guarantee future ones, and this is not financial advice. <a class="hero-link" href="${DECISION_DOCS}" target="_blank" rel="noopener">How the backtest works ↗</a></p>
+      </div>`;
+    el.hidden = false;
+    updateRuleTry();
+    $("#rule-slider").addEventListener("input", (e) => { state.ruleTry = +e.target.value; updateRuleTry(); });
+    $("#dec-period").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      state.decPeriod = b.dataset.p;
+      $$("#dec-period button").forEach((x) => x.classList.toggle("active", x === b));
+      drawBacktest(p);
+    });
+    $("#dec-prev").addEventListener("change", (e) => { state.decPrev = e.target.checked; drawBacktest(p); });
+    drawBacktest(p);
+  }
+
+  function updateRuleTry() {
+    const rule = state.decision?.rule; if (!rule) return;
+    const r = state.ruleTry, lvl = levelForPct(r, rule), mood = moodOfPct(r, rule);
+    $("#rule-try").innerHTML = stormMeter(r, rule);
+    $("#rule-slider-out").textContent = `${Math.round(r * 100)}%`;
+    const why = lvl === "Full"
+      ? `The mood would be ${mood}, so the rule stays fully invested.`
+      : `The mood would be Stormy, so the rule holds every asset ${rule.cut_to === 0 ? "in cash" : "at half"}.`;
+    $("#rule-result").innerHTML = `${posChip(lvl, true)} <span>${why}</span>`;
+  }
+
+  // Periods when the rule was cut back, as [start, end] date pairs.
+  function cutRuns(mk) {
+    const runs = [];
+    let start = null;
+    mk.exposure.forEach((e, i) => {
+      if (e < 1 && start == null) start = mk.date[i];
+      if ((e >= 1 || i === mk.exposure.length - 1) && start != null) { runs.push([start, mk.date[e >= 1 ? i - 1 : i]]); start = null; }
+    });
+    return runs;
+  }
+
+  // Equity (growth of $100) on top, drawdown below. One x-axis, two stacked panels.
+  function drawBacktest(p) {
+    const key = state.decPeriod, per = p.periods?.[key];
+    const eq = p.equity;
+    let idx = eq.date.map((_, i) => i);
+    if (key !== "all" && per) idx = idx.filter((i) => eq.date[i] >= per.start && eq.date[i] <= per.end);
+    if (idx.length < 2) idx = eq.date.map((_, i) => i);
+    // Rebase to $100 at the start of the selected period (one week before, when available).
+    if (idx[0] > 0 && key !== "all") idx.unshift(idx[0] - 1);
+    const x = idx.map((i) => eq.date[i]);
+    const names = ["buy_and_hold", ...(state.decPrev ? ["surprise_rule"] : []), "mood_rule"];
+    const traces = [], ann = [];
+    let yLo = Infinity, yHi = -Infinity;
+    const short = { mood_rule: "Mood rule", buy_and_hold: "Buy & hold", surprise_rule: "Previous" };
+    names.forEach((n) => {
+      const raw = idx.map((i) => eq[n][i]);
+      const y = raw.map((v) => (v / raw[0]) * 100);
+      yLo = Math.min(yLo, ...y); yHi = Math.max(yHi, ...y);
+      let peak = -Infinity;
+      const dd = y.map((v) => { peak = Math.max(peak, v); return (v / peak - 1) * 100; });
+      const color = sysColor(n), dash = n === "surprise_rule" ? "dash" : "solid";
+      const main = n === "mood_rule";
+      traces.push({ type: "scatter", mode: "lines", x, y, xaxis: "x", yaxis: "y", line: { color, width: main ? 2.4 : 1.8, dash }, hovertemplate: `${SYS_SHORT[n]}: $%{y:,.0f}<extra></extra>` });
+      traces.push({ type: "scatter", mode: "lines", x, y: dd, xaxis: "x", yaxis: "y2", line: { color, width: main ? 1.8 : 1.4, dash },
+        fill: main ? "tozeroy" : "none", fillcolor: main ? hexA(color, 0.14) : undefined,
+        hovertemplate: `${SYS_SHORT[n]}: %{y:.1f}% from peak<extra></extra>` });
+      ann.push({ x: x[x.length - 1], y: y[y.length - 1], xref: "x", yref: "y", text: `<b>$${Math.round(y[y.length - 1])}</b> ${short[n]}`, showarrow: false, xanchor: "left", xshift: 6, font: { size: 11, color: css("--ink-2") } });
+      if (n !== "surprise_rule") {
+        const k = dd.indexOf(Math.min(...dd));
+        ann.push({ x: x[k], y: dd[k], xref: "x", yref: "y2", text: `${dd[k].toFixed(0)}%`, showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color, ax: main ? 26 : -26, ay: 14, font: { size: 10.5, color: css("--ink-2") } });
+      }
+    });
+    // Move end labels apart when they'd overlap (the top panel is ~200px tall; labels need ~14px).
+    const ends = ann.filter((a) => a.yref === "y").sort((a, b) => a.y - b.y);
+    const px = 200 / ((yHi - yLo) || 1);
+    for (let i = 1; i < ends.length; i++) {
+      const gap = (ends[i].y - ends[i - 1].y) * px + (ends[i].yshift || 0) - (ends[i - 1].yshift || 0);
+      if (gap < 14) { ends[i - 1].yshift = (ends[i - 1].yshift || 0) - (14 - gap) / 2; ends[i].yshift = (ends[i].yshift || 0) + (14 - gap) / 2; }
+    }
+    // Shade the weeks the rule was cut back.
+    const x0 = x[0], x1 = x[x.length - 1];
+    const shapes = cutRuns(p.market).filter(([a, b]) => b >= x0 && a <= x1).map(([a, b]) => ({
+      type: "rect", xref: "x", yref: "paper", x0: a, x1: b === a ? new Date(new Date(b).getTime() + 86400000).toISOString().slice(0, 10) : b,
+      y0: 0, y1: 1, fillcolor: css("--storm"), opacity: 0.22, line: { width: 0 }, layer: "below",
+    }));
+    const narrow = ($("#dec-chart")?.clientWidth || 800) < 520;
+    if (narrow) ann.forEach((a) => { if (a.yref === "y") { a.text = a.text.replace(/ (Mood rule|Buy & hold|Previous)$/, ""); a.font.size = 10; } });
+    Plotly.react("dec-chart", traces, {
+      ...plotBase(), margin: { l: 52, r: narrow ? 44 : 100, t: 10, b: 26 },
+      xaxis: axis({ type: "date", anchor: "y2", range: [x0, x1] }),
+      yaxis: axis({ domain: [0.4, 1], tickprefix: "$", title: { text: "Growth of $100", font: { size: 11 } } }),
+      yaxis2: axis({ domain: [0, 0.3], ticksuffix: "%", title: { text: "Drop from peak", font: { size: 11 } }, rangemode: "tozero" }),
+      shapes, annotations: ann,
+    }, { ...plotCfg, displayModeBar: false });
+    renderBacktestTable(p, key);
+  }
+
+  function hexA(hex, a) {
+    const h = hex.replace("#", "");
+    if (h.length !== 6) return hex;
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+  }
+
+  function renderBacktestTable(p, key) {
+    const names = ["mood_rule", "buy_and_hold", ...(state.decPrev ? ["surprise_rule"] : [])];
+    const rows = names.map((n) => ({ n, s: p.systems[n][key] })).filter((r) => r.s);
+    const best = (f) => Math.max(...rows.map((r) => f(r.s)));
+    const bGrowth = best((s) => s.net_return), bDrop = best((s) => s.max_drawdown), bSharpe = best((s) => s.sharpe);
+    const r = p.systems.mood_rule[key], b = p.systems.buy_and_hold[key];
+    const label = key === "all" ? `${p.since.slice(0, 4)}–${p.through.slice(0, 4)}` : key;
+    const same = r && b && r.net_return === b.net_return && r.max_drawdown === b.max_drawdown;
+    const story = !r || !b ? "" : same
+      ? `In the ${esc(label)} the mood never turned Stormy, so the rule simply held: same result as buy and hold.`
+      : `${key === "all" ? "Over the whole test" : `In the ${esc(label)}`}, the rule ${r.net_return >= b.net_return ? "grew more" : "grew less"} (${growth(r.net_return)} vs. ${growth(b.net_return)}) and its worst drop was ${r.max_drawdown >= b.max_drawdown ? "smaller" : "bigger"} (${drop(r.max_drawdown)} vs. ${drop(b.max_drawdown)}).`;
+    $("#dec-table").innerHTML = `
+      <table class="compare plain dec-tbl">
+        <thead><tr><th></th><th>Growth</th><th>Worst drop</th><th title="Return per unit of risk (Sharpe ratio). Higher is better.">Reward / risk</th></tr></thead>
+        <tbody>${rows.map(({ n, s }) => `<tr><td><i class="swatch" style="background:${sysColor(n)}"></i>${SYS_SHORT[n]}</td>
+          <td class="${s.net_return === bGrowth ? "best" : ""}">${growth(s.net_return)}</td>
+          <td class="${s.max_drawdown === bDrop ? "best" : ""}">${drop(s.max_drawdown)}</td>
+          <td class="${s.sharpe === bSharpe ? "best" : ""}">${s.sharpe.toFixed(2)}</td></tr>`).join("")}</tbody>
+      </table>
+      <p class="dec-story">${story}</p>
+      <p class="small muted" style="margin:6px 0 0">Reward / risk is the Sharpe ratio: return per unit of volatility. Bold = best in each column.${state.decPrev ? " The previous rule cut back after unexpectedly big swings, which usually came just before rebounds." : ""}</p>`;
+  }
+
+  // ---------- per-asset decision card ----------
+  async function loadDecision(sym) {
+    if (state.decAsset[sym] && !state.decAsset[sym].error) { renderDecisionCard(sym); return; }
+    renderDecisionCard(sym);
+    try {
+      state.decAsset[sym] = await api(`/api/decision/${encodeURIComponent(sym)}`);
+    } catch (e) {
+      state.decAsset[sym] = { error: e.message };
+    }
+    if (state.selected === sym) renderDecisionCard(sym);
+  }
+
+  function renderDecisionCard(sym) {
+    const el = $("#decision-card");
+    if (!el) return;
+    const a = state.decAsset[sym];
+    const head = (extra = "") => `<div class="card-head"><div><span class="core-badge dec">⇄ Decision layer</span> <h2 class="feature-title">What the rule says for ${esc(sym)}</h2></div>${extra}</div>`;
+    if (a === undefined) { el.innerHTML = `<div class="card dec-card">${head()}<p class="unavailable">Loading the decision…</p></div>`; return; }
+    if (a.error) { el.innerHTML = `<div class="card dec-card">${head()}<p class="unavailable">${esc(a.error)}</p></div>`; return; }
+    const rule = a.rule, rec = a.record;
+    const own = state.regime[sym]?.mood?.name;
+    const cell = (s, f) => (s && s.n_days ? f(s) : "–");
+    el.innerHTML = `
+      <div class="card dec-card">
+        ${head(`<a class="hero-link" href="${DECISION_DOCS}" target="_blank" rel="noopener">How the rule works ↗</a>`)}
+        <div class="dec-top">
+          <div class="dec-main">
+            <div class="dec-now">${posChip(a.level, true)}</div>
+            <div class="fh-sub">since <b>${esc(fmtDate(a.since))}</b> · ${a.days_in_position} trading days</div>
+          </div>
+          <div class="fh-facts">
+            <div><span class="k">Market mood</span><span class="v">${a.storm == null ? "–" : moodChip({ name: moodOfPct(a.storm, rule) })}</span></div>
+            <div><span class="k">Busier than</span><span class="v">${a.storm == null ? "–" : Math.round(a.storm * 100) + "%"}<small> of past days</small></span></div>
+            ${own ? `<div><span class="k">${esc(sym)}'s own mood</span><span class="v">${moodChip({ name: own })}</span></div>` : ""}
+          </div>
+          <p class="fh-text">${esc(a.text)}</p>
+          <div class="dec-meter">${stormMeter(a.storm, rule)}</div>
+          <p class="small muted dec-own">The rule follows the market's mood, not ${esc(sym)}'s own, so every asset gets the same call. A version that used each asset's own mood tested worse.</p>
+        </div>
+        <div class="dec-bottom">
+          <div>
+            <h3 class="mini-h">Time spent in each position (${esc(sym)})</h3>
+            <div class="abar sm">${LEVEL_ORDER.map((l) => (a.time_in[l] ? `<span class="ab ${l}" style="flex:${a.time_in[l]}" title="${POS[l].word}: ${Math.round(a.time_in[l] * 100)}% of days">${a.time_in[l] >= 0.12 ? `${Math.round(a.time_in[l] * 100)}%` : ""}</span>` : "")).join("")}</div>
+            <div class="alegend">${LEVEL_ORDER.filter((l) => l !== "Cash" || a.time_in.Cash).map((l) => `<span>${posChip(l)} ${Math.round((a.time_in[l] || 0) * 100)}%</span>`).join("")}</div>
+          </div>
+          <div>
+            <h3 class="mini-h">Rule vs. buy and hold for ${esc(sym)}</h3>
+            <table class="compare plain dec-tbl">
+              <thead><tr><th></th><th colspan="2">Growth</th><th colspan="2">Worst drop</th></tr>
+                <tr class="subh"><th></th><th>Rule</th><th>Hold</th><th>Rule</th><th>Hold</th></tr></thead>
+              <tbody>${Object.keys(rec.mood_rule).map((k) => {
+                const r = rec.mood_rule[k], b = rec.buy_and_hold[k];
+                const ok = r?.n_days && b?.n_days;
+                // "Better" only when the difference shows at the displayed precision.
+                const gWin = ok && growth(r.net_return) !== growth(b.net_return) && r.net_return > b.net_return;
+                const dWin = ok && drop(r.max_drawdown) !== drop(b.max_drawdown) && r.max_drawdown > b.max_drawdown;
+                return `<tr><td>${k === "all" ? "Whole test" : esc(k)}</td>
+                  <td class="${gWin ? "best" : ""}">${cell(r, (s) => growth(s.net_return))}</td><td>${cell(b, (s) => growth(s.net_return))}</td>
+                  <td class="${dWin ? "best" : ""}">${cell(r, (s) => drop(s.max_drawdown))}</td><td>${cell(b, (s) => drop(s.max_drawdown))}</td></tr>`;
+              }).join("")}</tbody>
+            </table>
+            <p class="small muted" style="margin:8px 0 0">Bold = the rule did better. Identical rows mean the mood never turned Stormy in that period. One asset is noisy; judge the rule on the ${state.decision?.assets ?? 56}-asset backtest above. Not financial advice.</p>
+          </div>
+        </div>
+      </div>`;
+  }
+
   // Levels explanation in a modal dialog
   function openLevels(scope) {
     const isMarket = scope === "market";
@@ -1003,11 +1316,14 @@
       applyTheme(next); store.set("anomality.theme", next);
       if (state.detail && $("#price-chart")) renderDetail(state.detail);
       if (state.market) renderHero(state.market);
+      if (state.decision) renderDecisionBand(state.decision);
+      if (state.selected && $("#decision-card")) renderDecisionCard(state.selected);
     });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.detail && $("#price-chart")) renderDetail(state.detail); });
 
     state.heroChart = store.get("anomality.heroChart", false);
     loadMarket();
+    loadDecisionPortfolio();
     api("/api/watchlist").then((w) => {
       state.lists = { stocks: w.stocks, crypto: w.crypto };
       renderWatchlist();

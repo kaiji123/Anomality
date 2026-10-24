@@ -60,6 +60,36 @@ to see the crash-proofing at work, here for NVDA in the 2020 crash:
 
 ![Asset forecast card](docs/images/product_asset_card.png)
 
+### What to do about it: the decision layer
+
+One simple rule, driven by the regime model: **when the market mood is Stormy, hold every
+asset at half; otherwise stay fully invested.** Stormy is the app's own band: this week's
+market forecast is busier than 90% of all earlier days. No training, no tuning.
+
+| | Growth | Worst drop | COVID crash drop | Return per unit of risk |
+|---|---|---|---|---|
+| **Mood rule** | **+579%** | **−30.3%** | **−21.3%** | **1.37** |
+| Buy and hold | +568% | −34.2% | −33.8% | 1.22 |
+
+Backtested on the model's out-of-sample forecasts (56 assets, May 2019 – Oct 2026, 0.05%
+trading costs, trades the next day). It was half invested on only 4% of days, so its edge
+comes from a handful of storms (mainly 2020 and 2022), and it gave a little back in 2019 and
+2025. Details, robustness and caveats: [docs/DECISION_LAYER.md](docs/DECISION_LAYER.md).
+
+- **Today's call** for all 56 assets, with the reason in plain words.
+- **Try it:** a slider on the storm meter shows when the rule would cut back.
+- **Backtest chart:** growth of $100 and the drop from peak vs. buy-and-hold, with the Stormy
+  weeks shaded, zoomable to the COVID crash, the recovery, the 2022 bear market and calm
+  2023–24. Tick **Previous rule** to compare with our first rule, which cut back after
+  unexpectedly big swings and lagged buy-and-hold (+400%) because those swings were usually
+  followed by rebounds.
+- **Every asset:** today's position, the market mood next to the asset's own mood, and the
+  rule vs. buy-and-hold for that asset in each market phase.
+
+![The decision layer: today's call and the backtest](docs/images/product_decision.png)
+
+![What the rule says for one asset](docs/images/product_decision_asset.png)
+
 ### The full report, for the curious
 
 **Read more about the anomaly report** opens the detail: why the model holds up in a crash
@@ -81,6 +111,7 @@ flowchart LR
     B --> C["RG-ResMoE<br/>base network + 4 experts<br/>+ regime gate"]
     C --> D["Next-week<br/>volatility forecast"]
     D --> E["Anomaly report<br/>mood · expected move<br/>· surprises"]
+    E --> F["Decision layer<br/>half when Stormy<br/>+ backtest"]
     classDef ours fill:#2a78d6,stroke:#1c5cab,color:#ffffff;
     class B ours;
 ```
@@ -97,6 +128,9 @@ flowchart LR
    ([docs/CRISIS_ROBUST_GATING.md](docs/CRISIS_ROBUST_GATING.md), with diagrams and significance tests).
 4. **Report:** forecasts become weekly moves (≈ 2 weeks in 3 stay inside them), moods compare
    each week with seven years of history, and surprises flag weeks that moved 2× more than expected.
+5. **Decision layer:** when the market mood is Stormy (the busiest 10% of weeks), every asset
+   is held at half; otherwise fully invested. Backtested after costs with a one-day trading
+   delay ([docs/DECISION_LAYER.md](docs/DECISION_LAYER.md)).
 
 ![Failure and fix](docs/images/diagram_failure_and_fix.png)
 
@@ -134,6 +168,7 @@ uvicorn backend.app:app --port 8000
 .venv/bin/python -m regime.report                 # figures and docs/REGIME_RESULTS.md
 .venv/bin/python -m regime.figures_log            # crash-proofing figures
 .venv/bin/python -m backend.regime_service        # refresh the compact files the app ships with
+.venv/bin/python -m backend.run_decision          # decision-layer backtest -> results/decision.json
 ```
 
 **Troubleshooting**
@@ -154,11 +189,11 @@ uvicorn backend.app:app --port 8000
 
 ```bash
 pip install -r requirements-dev.txt     # pinned app dependencies + pytest, httpx, ruff
-pytest                                  # 17 offline tests: metrics, data cleaning, walk-forward splits, report logic
+pytest                                  # 31 offline tests: metrics, data cleaning, walk-forward splits, report logic, decision layer
 pytest --run-network                    # + live end-to-end API tests against Yahoo Finance
 ruff check .                            # lint for real bugs (undefined names, unused imports)
 
-# Browser smoke test (with the app running on :8000): 14 checks on desktop and phone
+# Browser smoke test (with the app running on :8000): 20 checks on desktop and phone
 cd scripts && npm install && npx playwright install chromium && node smoke_test.js
 ```
 
@@ -185,6 +220,7 @@ It works for any Yahoo Finance ticker.
 | [CRISIS_ROBUST_GATING.md](docs/CRISIS_ROBUST_GATING.md) | Our contribution: the failure, the fix, the evidence, diagrams, pitch |
 | [REGIME_MODEL.md](docs/REGIME_MODEL.md) | The model, the benchmark against the authors' code, all findings |
 | [REGIME_RESULTS.md](docs/REGIME_RESULTS.md) | Every metric by segment and seed (auto-generated) |
+| [DECISION_LAYER.md](docs/DECISION_LAYER.md) | The mood rule, why it replaced the first rule, the backtest, results by phase, robustness |
 | [DATA_COLLECTION.md](docs/DATA_COLLECTION.md) | Data source, cleaning, features, limitations |
 
 ## API
@@ -193,6 +229,8 @@ It works for any Yahoo Finance ticker.
 |---|---|
 | `GET /api/regime/market` | This week's anomaly report: mood and scale, expected moves, biggest swings, track record |
 | `GET /api/regime/{symbol}` | One asset: expected move, mood and scale, history, accuracy, surprises |
+| `GET /api/decision/portfolio` | Decision layer: today's position for every asset, and the backtest vs. buy-and-hold |
+| `GET /api/decision/{symbol}` | One asset: today's position, reason, switches, and its own backtest |
 | `GET /api/analyze/{symbol}` | Classic anomaly detection and decision model for any ticker |
 | `GET /api/scan?symbols=…` | Classic model summary for several tickers |
 

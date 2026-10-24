@@ -114,6 +114,11 @@ def _preds() -> Dict[str, Optional[pd.DataFrame]]:
         return _preds_cache
 
 
+def recommended_forecasts() -> Optional[pd.DataFrame]:
+    """Walk-forward test forecasts of the recommended (log-input) model, indexed by symbol, date."""
+    return _preds()["log"]
+
+
 def _ensure_loaded() -> dict:
     with _lock:
         if _state.get("loaded_at") and time.time() - _state["loaded_at"] < 600:
@@ -134,6 +139,18 @@ def _ensure_loaded() -> dict:
             "loaded_at": time.time(),
         })
         return _state
+
+
+def live_forecasts(after: pd.Timestamp) -> pd.DataFrame:
+    """The final model's forecasts for days after `after` (where the walk-forward test
+    forecasts end), so day-by-day consumers can run up to today. Columns: pred, rv20."""
+    st = _ensure_loaded()
+    panel: pd.DataFrame = st["panel"]
+    recent = panel[panel.index.get_level_values("date") > after]
+    if recent.empty:
+        return pd.DataFrame(columns=["pred", "rv20"])
+    f, _ = _predict(st["log"], recent)
+    return pd.DataFrame({"pred": f, "rv20": recent["rv20"].to_numpy()}, index=recent.index)
 
 
 def _gate_input_z(m: dict, mkt_vol: float) -> float:

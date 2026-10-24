@@ -32,6 +32,13 @@ STRESS_PERIODS = {  # key -> (label, start, end)
     "2022_bear_market": ("2022 bear market", "2022-01-03", "2022-10-31"),
 }
 CALM_REFERENCE = ("Calm 2019", "2019-06-01", "2020-01-31")
+# Market phases the decision-layer backtest is sliced into (crises reuse STRESS_PERIODS).
+MARKET_PERIODS = {
+    "covid_crash": STRESS_PERIODS["covid_crash"],
+    "recovery": ("Recovery 2020–21", "2020-05-01", "2021-12-31"),
+    "2022_bear_market": STRESS_PERIODS["2022_bear_market"],
+    "calm_2023_24": ("Calm 2023–24", "2023-01-01", "2024-12-31"),
+}
 # Volatility inputs that can be log-transformed before scaling (keeps crisis spikes in range).
 LOG_COLS: List[str] = ["rv5", "rv20", "rv60", "mkt_vol", "idio_vol"]
 

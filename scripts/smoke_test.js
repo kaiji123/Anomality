@@ -43,6 +43,19 @@ async function page(browser, opts) {
   await p.click('#regime-range button[data-r="2020 crash"]');
   await p.click("#cmp-original");
   check("Original-model comparison draws a third line", await p.evaluate(() => document.querySelectorAll("#regime-chart .scatterlayer .trace").length >= 4));
+  // Decision layer: market band, try-it slider, backtest periods and comparison, asset card
+  await p.waitForSelector("#dec-chart .main-svg", T);
+  const band = await p.textContent("#decision-hero");
+  check("Decision band shows today's call from the market mood", /Fully invested|Half invested/.test(band) && /Stormy/.test(band));
+  check("Backtest compares the rule with buy and hold", (await p.$$("#dec-table tbody tr")).length >= 2 && /worst drop/i.test(band));
+  await p.$eval("#rule-slider", (el) => { el.value = "0.95"; el.dispatchEvent(new Event("input", { bubbles: true })); });
+  check("Try-it slider cuts to half when the mood is Stormy", (await p.textContent("#rule-result")).includes("Half invested"));
+  await p.click('#dec-period button[data-p="2022 bear market"]');
+  check("Period buttons update the backtest story", (await p.textContent("#dec-table")).includes("2022 bear market"));
+  await p.click("#dec-prev");
+  check("Previous rule can be added for comparison", (await p.$$("#dec-table tbody tr")).length === 3);
+  await p.waitForSelector("#decision-card .pos.lg", T);
+  check("Asset card shows the rule's position and the market mood", /Fully invested|Half invested/.test(await p.textContent("#decision-card")) && (await p.$("#decision-card .smeter")) !== null);
   await p.waitForSelector("#price-chart .main-svg", T);
   check("Classic model verdict still renders", (await p.textContent("#detail")).includes("Classic model verdict"));
   await p.waitForFunction(() => !document.querySelector(".skeleton"), null, T);
@@ -53,6 +66,7 @@ async function page(browser, opts) {
   // Phone: layout fits the screen
   const m = await page(browser, { viewport: { width: 390, height: 844 } });
   await m.waitForSelector("#regime-card .mscale", T);
+  await m.waitForSelector("#decision-card .pos.lg", T);
   await m.waitForTimeout(1000);
   const width = await m.evaluate(() => document.documentElement.scrollWidth);
   check("Phone layout has no sideways scroll", width <= 390, `scrollWidth ${width}`);

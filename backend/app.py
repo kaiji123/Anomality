@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .analysis import FEATURES, DecisionModel, Settings, detect, features
 from .data import DataError, load_prices
+from . import decision_service
 from .regime_service import RegimeUnavailable, plain_asset, plain_market
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -173,6 +174,22 @@ def api_regime(symbol: str):
     try:
         return _clean(plain_asset(symbol))
     except RegimeUnavailable as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/api/decision/portfolio")
+def api_decision_portfolio():
+    try:
+        return _clean(decision_service.plain_portfolio())
+    except decision_service.DecisionUnavailable as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/decision/{symbol}")
+def api_decision(symbol: str):
+    try:
+        return _clean(decision_service.plain_asset(symbol))
+    except decision_service.DecisionUnavailable as e:
         raise HTTPException(404, str(e))
 
 

@@ -54,20 +54,31 @@ def _rsi(close: pd.DataFrame, n: int = 14) -> pd.DataFrame:
     return 100 - 100 / (1 + gain / loss.replace(0, np.nan))
 
 
-def build_panel(cfg: TrainConfig, use_cache: bool = True) -> pd.DataFrame:
+def trading_day_closes(cfg: TrainConfig, use_cache: bool = True) -> Tuple[pd.DataFrame, List[str], List[str]]:
+    """Closes on the U.S. trading calendar, plus the stock and crypto symbols that downloaded.
+
+    Crypto trades every day, so sampling it on these dates means a Monday crypto return
+    includes the weekend."""
     stocks = list(STOCKS)
     crypto = list(CRYPTO) if cfg.include_crypto else []
     closes = load_closes(stocks + crypto, cfg.period, use_cache)
     stocks = [s for s in stocks if s in closes.columns]
     crypto = [s for s in crypto if s in closes.columns]
-
-    # Use the U.S. trading calendar. Crypto trades every day, so sampling it on these dates
-    # means a Monday crypto return includes the weekend.
     calendar = closes[stocks].dropna(how="all").index
     closes = closes.reindex(calendar)
     if crypto:
         closes[crypto] = closes[crypto].ffill(limit=3)
+    return closes, stocks, crypto
 
+
+def daily_returns(cfg: TrainConfig, use_cache: bool = True) -> pd.DataFrame:
+    """Simple daily returns, one column per symbol, on the same calendar as the training panel."""
+    closes, _, _ = trading_day_closes(cfg, use_cache)
+    return closes.pct_change(fill_method=None)
+
+
+def build_panel(cfg: TrainConfig, use_cache: bool = True) -> pd.DataFrame:
+    closes, stocks, crypto = trading_day_closes(cfg, use_cache)
     r = np.log(closes).diff()
     r_m = r[stocks].mean(axis=1, skipna=True)  # equal-weighted market return (stocks only)
 
