@@ -320,12 +320,24 @@ def main():
     st.set_page_config(page_title="AdaptiveTrader dashboard", layout="wide")
     data, errors, demo_used = _load_data()
     _sidebar(data, demo_used, errors)
+    def _pg_time_machine():
+        page_time_machine(data, demo_used, errors)
+
+    def _pg_strategy_lab():
+        page_strategy_lab(data, demo_used, errors)
+
+    def _pg_learning():
+        page_learning(data, demo_used, errors)
+
+    def _pg_risk():
+        page_risk(data, demo_used, errors)
+
     if hasattr(st, "navigation") and hasattr(st, "Page"):
         nav = st.navigation([
-            st.Page(lambda: page_time_machine(data, demo_used, errors), title="Time machine"),
-            st.Page(lambda: page_strategy_lab(data, demo_used, errors), title="Strategy lab"),
-            st.Page(lambda: page_learning(data, demo_used, errors), title="Learning timeline"),
-            st.Page(lambda: page_risk(data, demo_used, errors), title="Risk & decisions"),
+            st.Page(_pg_time_machine, title="Time machine", url_path="time-machine"),
+            st.Page(_pg_strategy_lab, title="Strategy lab", url_path="strategy-lab"),
+            st.Page(_pg_learning, title="Learning timeline", url_path="learning-timeline"),
+            st.Page(_pg_risk, title="Risk & decisions", url_path="risk-decisions"),
         ])
         nav.run()
     else:
