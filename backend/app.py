@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .analysis import FEATURES, DecisionModel, Settings, detect, features
 from .data import DataError, load_prices
+from .regime_service import RegimeUnavailable, plain_asset, plain_market
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
@@ -133,6 +134,22 @@ def api_scan(
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(one, tickers))
     return _clean({"results": results})
+
+
+@app.get("/api/regime/market")
+def api_regime_market():
+    try:
+        return _clean(plain_market())
+    except RegimeUnavailable as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/regime/{symbol}")
+def api_regime(symbol: str):
+    try:
+        return _clean(plain_asset(symbol))
+    except RegimeUnavailable as e:
+        raise HTTPException(404, str(e))
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

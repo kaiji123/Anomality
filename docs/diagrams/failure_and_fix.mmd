@@ -3,10 +3,10 @@ flowchart TB
     C --> R1["<b>Raw inputs (paper)</b><br/>11.7 std devs outside training data"]
     C --> L1["<b>Log inputs (ours)</b><br/>4.3 std devs outside training data"]
     R1 --> R2["Gate extrapolates<br/>into unknown territory"]
-    R2 --> R3["Locks onto one expert<br/>top weight 0.68"]
+    R2 --> R3["Herds 93% of stocks<br/>into one expert"]
     R3 --> R4["IC 0.512 · QLIKE 1.81<br/>worse than naive forecast"]
     L1 --> L2["Gate stays near<br/>familiar range"]
-    L2 --> L3["Keeps blending experts<br/>top weight 0.58"]
+    L2 --> L3["Keeps routing stocks individually<br/>82% in the top expert"]
     L3 --> L4["IC 0.524 · QLIKE 1.67<br/>beats naive forecast"]
     classDef raw fill:#fdeee8,stroke:#eb6834,color:#0b0b0b;
     classDef log fill:#e6f0fb,stroke:#2a78d6,color:#0b0b0b;

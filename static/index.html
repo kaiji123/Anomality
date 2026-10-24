@@ -21,7 +21,10 @@
     <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
   </header>
 
-  <section class="controls" aria-label="Model settings">
+  <section id="regime-hero" class="hero" aria-label="Crisis-robust regime model" hidden></section>
+
+  <section class="controls" aria-label="Classic model settings">
+    <span class="controls-title">Classic model settings</span>
     <label>History
       <select id="period">
         <option value="1y">1 year</option>
@@ -59,7 +62,8 @@
       <div class="sort-row">
         <span class="muted">Sort</span>
         <select id="sort">
-          <option value="risk">Risk score</option>
+          <option value="volfc">Expected move this week</option>
+          <option value="risk">Risk score (classic)</option>
           <option value="anomaly">Anomaly today</option>
           <option value="change">Daily move</option>
           <option value="symbol">Symbol</option>
@@ -77,6 +81,14 @@
   <footer class="footer muted small">
     anomality is a statistical research tool, not financial advice. Data: Yahoo Finance (daily candles).
   </footer>
+
+  <dialog id="levels-modal" class="modal" aria-labelledby="levels-modal-title">
+    <div class="modal-head">
+      <h2 id="levels-modal-title">What do the mood levels mean?</h2>
+      <button class="icon-btn" id="levels-modal-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body" id="levels-modal-body"></div>
+  </dialog>
 
   <script src="/static/app.js"></script>
 </body>

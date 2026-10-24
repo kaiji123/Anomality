@@ -13,7 +13,7 @@ Background on the model: [REGIME_MODEL.md](REGIME_MODEL.md) · All metrics: [REG
 > RG-ResMoE, a 2026 model whose "regime gate" is meant to adapt to market conditions, and
 > stress-tested it on the COVID crash. Market volatility hit 102%, which the gate saw as an input
 > **11.7 standard deviations** beyond anything in its training data. The gate locked up on a
-> single expert, and its forecasts did worse than a naive baseline. We fixed it by feeding
+> single expert for almost every stock, and its forecasts did worse than a naive baseline. We fixed it by feeding
 > volatility to the model on a log scale, which brings the same crash down to 4.3 standard
 > deviations. Tested on 30 rolling windows from 2019 to 2026, the fix improved accuracy in
 > **25 of 30**, across every random seed, with p < 0.001. And the whole model is 3,177 weights
@@ -24,7 +24,8 @@ Background on the model: [REGIME_MODEL.md](REGIME_MODEL.md) · All metrics: [REG
 | | Paper's design (raw inputs) | **With our fix (log inputs)** |
 |---|---|---|
 | How far outside its training range the COVID peak looked to the gate | 11.7 std devs | **4.3 std devs** |
-| Gate weight on its top expert, mid-March to mid-April 2020 (calm 2019: 0.27) | 0.68 (locked up) | **0.58** (still blending) |
+| Stocks routed to the same expert, mid-March to mid-April 2020 (calm 2019: 51%) | 93% (herded into one) | **82%** (still stock-specific) |
+| Weight on each stock's top expert, same period (calm 2019: 0.29) | 0.69 | **0.63** |
 | QLIKE during the COVID crash (naive baseline: 1.70) | 1.81 (worse than naive) | **1.67** (beats naive) |
 | IC, all 30 test windows (2019–2026) | 0.6260 | **0.6307** |
 | Test windows improved | | **25 of 30** |
@@ -52,10 +53,10 @@ flowchart TB
     C --> R1["<b>Raw inputs (paper)</b><br/>11.7 std devs outside training data"]
     C --> L1["<b>Log inputs (ours)</b><br/>4.3 std devs outside training data"]
     R1 --> R2["Gate extrapolates<br/>into unknown territory"]
-    R2 --> R3["Locks onto one expert<br/>top weight 0.68"]
+    R2 --> R3["Herds 93% of stocks<br/>into one expert"]
     R3 --> R4["IC 0.512 · QLIKE 1.81<br/>worse than naive forecast"]
     L1 --> L2["Gate stays near<br/>familiar range"]
-    L2 --> L3["Keeps blending experts<br/>top weight 0.58"]
+    L2 --> L3["Keeps routing stocks individually<br/>82% in the top expert"]
     L3 --> L4["IC 0.524 · QLIKE 1.67<br/>beats naive forecast"]
     classDef raw fill:#fdeee8,stroke:#eb6834,color:#0b0b0b;
     classDef log fill:#e6f0fb,stroke:#2a78d6,color:#0b0b0b;
@@ -67,8 +68,12 @@ flowchart TB
 
 ### What the gate actually did
 
-With raw inputs, the gate collapsed onto expert 0 for weeks, putting up to 85–95% of its weight
-on it. With log inputs it kept blending experts and kept reacting as conditions changed.
+With raw inputs, the gate herded almost every stock into the same expert for weeks: 93% of
+stocks shared one dominant expert from mid-March to mid-April 2020 (vs. 51% in calm 2019), and
+the average weight across stocks reached 85–95% on some days. With log inputs, 82% shared one,
+so the gate kept more stock-specific routing and kept reacting as conditions changed. Each
+stock's own top-expert weight rose less too (0.63 vs. 0.69). The chart shows gate weights
+averaged across stocks; individual stocks vary.
 
 ![Gate through COVID](images/log_gate_covid.png)
 

@@ -1,31 +1,108 @@
 # anomality
 
-Detects anomalies in stocks and cryptocurrencies and uses a decision model to judge
-which assets are likely to make an **unusual move** in the coming days.
+**A weekly crisis report for stocks and crypto: how much prices could move this week, from an
+AI model built to stay reliable when markets crash.**
 
-## Screenshots
+![anomality: this week's crisis report](docs/images/product_crisis_report.png)
 
-![Dashboard, light mode](docs/images/app_dashboard_light.png)
+Most forecasting models learn from normal markets and then break down in a crash, exactly
+when you need them. anomality is built on a 2026 research model (RG-ResMoE) that we
+**crash-proofed**: we found that its regime gate fails in a market crash, fixed it with
+log-scaled volatility inputs, and tested the fix on seven years of data it never saw.
+
+## Why it matters
+
+| | |
+|---|---|
+| **±1.96%** | average miss on the weekly move, vs. ±2.24% for the simple "last month" estimate |
+| **29 of 30** | test periods since 2019 where it beat the simple estimate |
+| **3.6×** | how much more the assets it flags as most volatile actually moved than the ones it flags as calm |
+| **23% smaller** | misses than the simple estimate during the 2020 crash |
+| **25 of 30** | test periods where our crash-proofing beat the original research model (p < 0.001) |
+| **12 minutes** | to retrain the whole 7-year backtest on a laptop. The model is just 3,177 weights |
+
+All numbers are out-of-sample: the model is retrained on a rolling window and only scored on
+weeks it never saw (May 2019 – Oct 2026, 56 assets, 103,593 forecasts).
+
+## The product
+
+### This week's crisis report
+
+Four plain answers at the top of the app: the **market mood**, the **expected move this
+week** for a typical stock and crypto, the **biggest and calmest expected swings**, and
+**why you can trust it**. Every number is in everyday units: "±3.9% this week", not
+"annualized volatility".
+
+### A mood scale you can judge for yourself
+
+The mood isn't just a label. The scale shows where this week sits between **Calm**,
+**Normal**, **Choppy** and **Stormy**, with the move range for each level and how this week
+compares with history ("busier than 62% of weeks since 2019"). Click **What do the levels
+mean?** for a plain explanation of every level, what actually happened in those weeks, and
+when the market was last there.
+
+![What the mood levels mean](docs/images/product_levels_modal.png)
+
+| Level | Share of weeks | Typical stock actually moved | Last seen |
+|---|---|---|---|
+| ● Calm | quietest 35% | ±3.0% | Sep 2025 |
+| ◆ Normal | middle 35% | ±3.6% | this week |
+| ▲ Choppy | next 20% | ±4.2% | mid-2026 |
+| ⚠ Stormy | busiest 10% | ±6.5%, up to ±11% in rough weeks | Apr 2025, 2022 sell-off, 2020 crash |
+
+### Every asset, in dollars
+
+Open any asset to see its expected move this week, in percent and in dollars ("about
+±$10.29 on today's $210.96 price"), its own mood scale, its forecast vs. what actually
+happened since 2019, how accurate the model has been for it, and its **surprise weeks** (when
+it moved at least twice as much as forecast). Tick **Compare with original research model**
+to see the crash-proofing at work, here for NVDA in the 2020 crash:
+
+![Asset forecast card](docs/images/product_asset_card.png)
+
+### The full report, for the curious
+
+**Read more about the crisis report** opens the detail: why the model holds up in a crash
+(a COVID-sized shock looks 10.6× "off the charts" to the original model, 5.1× to ours), the
+full track record, and the model internals (regime gate weights, crisis herding, and the
+research statistics).
+
+![Full crisis report](docs/images/product_full_report.png)
 
 | Dark mode | Phone |
 |---|---|
-| ![Dark mode, BTC-USD](docs/images/app_dashboard_dark.png) | <img src="docs/images/app_mobile.png" width="260" alt="Phone layout"> |
+| ![Dark mode](docs/images/product_dark.png) | <img src="docs/images/product_mobile.png" width="260" alt="Phone layout"> |
 
-| Today's decision path and drivers | Decision tree and anomaly log |
-|---|---|
-| ![Decision path](docs/images/app_decision_path.png) | ![Tree and anomaly log](docs/images/app_tree_and_log.png) |
+## How it works
 
-Full page: [docs/images/app_full_page.png](docs/images/app_full_page.png)
+```mermaid
+flowchart LR
+    A["Daily prices<br/>56 stocks, ETFs<br/>and crypto"] --> B["Volatility features<br/><b>log-scaled</b> (our fix)"]
+    B --> C["RG-ResMoE<br/>base network + 4 experts<br/>+ regime gate"]
+    C --> D["Next-week<br/>volatility forecast"]
+    D --> E["Crisis report<br/>mood · expected move<br/>· surprises"]
+    classDef ours fill:#2a78d6,stroke:#1c5cab,color:#ffffff;
+    class B ours;
+```
 
-## How to run
+1. **Data:** daily prices from Yahoo Finance, cleaned for time zones, splits, dividends and
+   unfinished trading days ([docs/DATA_COLLECTION.md](docs/DATA_COLLECTION.md)).
+2. **Model:** RG-ResMoE (Ye & Borde, arXiv:2608.12251). A base network forecasts next-week
+   volatility; four "expert" networks add corrections; a gate decides how much to trust each
+   expert based on the market regime ([docs/REGIME_MODEL.md](docs/REGIME_MODEL.md)).
+3. **Our contribution, crash-proofing:** in the COVID crash, market volatility looked 11.7
+   standard deviations outside the original model's training data, and its gate herded 93% of
+   stocks into a single expert. Feeding volatility in on a log scale brings that crash down to
+   4.3 standard deviations and keeps the gate judging stocks individually
+   ([docs/CRISIS_ROBUST_GATING.md](docs/CRISIS_ROBUST_GATING.md), with diagrams and significance tests).
+4. **Report:** forecasts become weekly moves (≈ 2 weeks in 3 stay inside them), moods compare
+   each week with seven years of history, and surprises flag weeks that moved 2× more than expected.
 
-### Requirements
+![Failure and fix](docs/images/diagram_failure_and_fix.png)
 
-- **Python 3.9 or newer** (`python3 --version` to check)
-- An internet connection (for live market data; without one the app shows synthetic demo data)
-- macOS or Linux. On Windows, use the manual steps below.
+## Quick start
 
-### Quick start (macOS / Linux)
+Requires **Python 3.9+**, an internet connection, and macOS or Linux (Windows: see manual setup).
 
 ```bash
 git clone https://github.com/kaiji123/Anomality.git
@@ -33,13 +110,14 @@ cd Anomality
 ./run.sh
 ```
 
-The first run creates a virtual environment in `.venv/` and installs the dependencies,
-which takes about a minute. Later runs start in seconds. The app opens at
-**http://localhost:8000**. Press `Ctrl+C` in the terminal to stop it.
+The first run installs everything (about a minute) and opens **http://localhost:8000**. The
+trained models ship in `models/`, so the crisis report works straight away. Press `Ctrl+C` to stop.
+Different port: `PORT=8080 ./run.sh`.
 
-To use a different port: `PORT=8080 ./run.sh`
+<details>
+<summary>Manual setup, retraining and troubleshooting</summary>
 
-### Manual setup (any OS)
+**Manual setup (any OS)**
 
 ```bash
 python3 -m venv .venv
@@ -48,87 +126,59 @@ pip install -r requirements.txt
 uvicorn backend.app:app --port 8000
 ```
 
-Then open http://localhost:8000. For development, add `--reload` to restart on code changes.
+**Retrain the model**
 
-### Using the app
+```bash
+.venv/bin/python -m regime.train                  # recommended model, 30 windows × 3 seeds (~12 min)
+.venv/bin/python -m regime.train --preset paper   # the original research model, for comparison (~17 min)
+.venv/bin/python -m regime.report                 # figures and docs/REGIME_RESULTS.md
+.venv/bin/python -m regime.figures_log            # crash-proofing figures
+.venv/bin/python -m backend.regime_service        # refresh the compact files the app ships with
+```
 
-1. The watchlist on the left fills in over a few seconds while every asset is scanned.
-2. Click an asset to see its chart, anomalies and the model's verdict.
-3. Add any Yahoo Finance ticker in the search box (`GME`, `BHP.AX`, `^GSPC`, `PEPE-USD`).
-4. Use the sliders to change the sensitivity (σ), horizon (days), history length, model and tree depth.
-   Everything recalculates.
-
-### Troubleshooting
+**Troubleshooting**
 
 | Problem | Fix |
 |---|---|
 | `Address already in use` | Another program is using port 8000. Run `PORT=8080 ./run.sh` |
 | `permission denied: ./run.sh` | `chmod +x run.sh` |
+| Crisis report missing | Check that `models/rg_resmoe.pt`, `models/rg_resmoe_paper.pt` and `models/serving_*.csv.gz` exist, or retrain |
 | Yellow "synthetic demo data" banner | Yahoo Finance couldn't be reached. Check your connection and click ↻ Rescan |
-| `Symbol not found` | Use Yahoo's ticker format, e.g. `BTC-USD` not `BTC`, `BHP.AX` for Australian stocks |
-| `NotOpenSSLWarning` on macOS | Harmless warning from the system Python; it can be ignored |
+| `Symbol not found` | Use Yahoo's format, e.g. `BTC-USD` not `BTC`, `BHP.AX` for Australian stocks |
+| "Not in the training universe yet" | The crisis report covers the 56 trained assets; other tickers get the classic analysis only |
+| `NotOpenSSLWarning` on macOS | Harmless; ignore it |
 
-## Data
+</details>
 
-Prices come from Yahoo Finance's public chart endpoint (daily candles, no API key).
-See **[docs/DATA_COLLECTION.md](docs/DATA_COLLECTION.md)** for the source, the cleaning
-steps (time zones, split/dividend adjustment, unfinished sessions), the derived features
-and the known limitations.
+## Also inside: classic anomaly detection
 
-## What it does
+Below the crisis report, every asset also gets the original anomaly toolkit: z-score and
+Isolation Forest anomaly flags on the price chart, and a random forest / decision tree that
+estimates the chance of an unusual move, with its decision path and the full interactive tree.
+It works for any Yahoo Finance ticker.
 
-1. **Data**: daily candles from Yahoo Finance for any ticker (`AAPL`, `SPY`, `BTC-USD`, `^GSPC`, …).
-   If the network is down, it falls back to clearly labeled synthetic demo data.
-2. **Anomaly detection** (`backend/analysis.py → detect`):
-   - z-scores of return, volume, intraday range and opening gap vs. the previous 20 days
-   - an **Isolation Forest** that catches days that are odd across several features at once
-   - each day gets a 0–100 anomaly score and a type (price spike/crash, volume surge, gap, multi-factor outlier)
-3. **Decision model** (`DecisionModel`):
-   - 12 backward-looking indicators (volatility regime, momentum, RSI, Bollinger %B, recent shock count, …)
-   - target: does a move larger than *N*σ happen within the next *H* days?
-   - **random forest** (default) or single **decision tree**, trained on the first 75% of history
-     and tested on the most recent 25% it never saw (AUC, precision, recall shown in the UI)
-   - verdict: **High** (score ≥ 65), **Elevated** (≥ 50), **Normal**. 50 means "as likely as an average day"
-   - a single tree is always fitted so every verdict comes with readable rules and today's decision path
+| Decision path and drivers | Decision tree and anomaly log |
+|---|---|
+| ![Decision path](docs/images/app_decision_path.png) | ![Tree and anomaly log](docs/images/app_tree_and_log.png) |
 
-## Trained regime model
+## Documentation
 
-A research-paper model, **RG-ResMoE** (Ye & Borde, arXiv:2608.12251), trained on 56 assets to
-forecast next-week volatility, with a gate that adapts to the market regime. In a 30-window
-walk-forward test (2019–2026, 103,593 unseen forecasts) it beats the naive forecast and a
-same-size neural network (IC 0.631 vs. 0.625), and its experts switch visibly during the
-COVID crash and the 2022 bear market. The full backtest trains in about 12 minutes on a laptop.
-
-![Regime gate timeline](docs/images/regime_gate_timeline.png)
-
-- **Our contribution, crisis-robust regime gating:** the paper's regime gate breaks in a crash;
-  log-scaled volatility inputs fix it (25/30 test windows improved, p < 0.001).
-  **[docs/CRISIS_ROBUST_GATING.md](docs/CRISIS_ROBUST_GATING.md)**
-- Design, benchmark and findings: **[docs/REGIME_MODEL.md](docs/REGIME_MODEL.md)**
-- All tables and figures: **[docs/REGIME_RESULTS.md](docs/REGIME_RESULTS.md)**
-
-```bash
-.venv/bin/python -m regime.train --quick   # 1-minute smoke test
-.venv/bin/python -m regime.train           # full walk-forward training (~12 min)
-.venv/bin/python -m regime.report          # regenerate figures and tables
-```
-
-Not shown in the app yet; that's the next step.
-
-## Interface
-
-- Watchlist scanner (stocks, crypto, your own tickers), sorted by risk
-- Price chart with anomaly markers and volume; click a log row to zoom to that date
-- Out-of-sample risk-score history vs. actual unusual moves
-- Today's decision path, feature importance, and the full interactive decision tree
-- Adjustable sensitivity (σ), horizon (days), history length, model type and tree depth
-- Light and dark themes, works on phones
+| Doc | What's in it |
+|---|---|
+| [CRISIS_ROBUST_GATING.md](docs/CRISIS_ROBUST_GATING.md) | Our contribution: the failure, the fix, the evidence, diagrams, pitch |
+| [REGIME_MODEL.md](docs/REGIME_MODEL.md) | The model, the benchmark against the authors' code, all findings |
+| [REGIME_RESULTS.md](docs/REGIME_RESULTS.md) | Every metric by segment and seed (auto-generated) |
+| [DATA_COLLECTION.md](docs/DATA_COLLECTION.md) | Data source, cleaning, features, limitations |
 
 ## API
 
-- `GET /api/analyze/{symbol}?period=5y&threshold=2.5&horizon=5&model=forest&depth=4`
-- `GET /api/scan?symbols=AAPL,BTC-USD&…`
-- `GET /api/watchlist`
+| Endpoint | Returns |
+|---|---|
+| `GET /api/regime/market` | This week's crisis report: mood and scale, expected moves, biggest swings, track record |
+| `GET /api/regime/{symbol}` | One asset: expected move, mood and scale, history, accuracy, surprises |
+| `GET /api/analyze/{symbol}` | Classic anomaly detection and decision model for any ticker |
+| `GET /api/scan?symbols=…` | Classic model summary for several tickers |
 
-> Statistical research tool, not financial advice. Market moves are mostly unpredictable;
-> the model mainly picks up volatility clustering, and its accuracy is shown honestly in the UI.
+> anomality is a research tool, not financial advice. It forecasts how much prices may move,
+> not which direction, and no model can predict the timing of a crash. Its accuracy is shown
+> openly in the app.
