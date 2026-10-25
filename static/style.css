@@ -497,3 +497,57 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 @media (max-width: 560px) { .lg-list { grid-template-columns: 1fr; } }
 .card-head { flex-wrap: wrap; }
 .seg { flex-wrap: wrap; max-width: 100%; }
+
+/* decision layer: portfolio section + per-asset decision card */
+.decision-portfolio { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px 16px; }
+.dp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 12px; }
+.dp-head h2 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+.dp-head .muted { font-size: 12px; }
+.dp-badge { background: var(--ink-2); }
+.dp-tiles { display: grid; grid-template-columns: repeat(3, 1fr) 1.4fr; gap: 12px; }
+.dp-big { font-size: 22px; font-weight: 700; margin: 4px 0 4px; font-variant-numeric: tabular-nums; }
+.dp-big .muted { font-size: 13px; font-weight: 500; }
+.table-scroll { overflow-x: auto; }
+.dp-table td, .dp-table th { white-space: nowrap; }
+.dp-table th[title], .compare th[title] { text-decoration: underline dotted var(--axis); cursor: help; }
+.dp-caveats li { max-width: 980px; }
+.swatch-line, .feature-legend i.sys-adaptive_tiered, .feature-legend i.sys-adaptive_binary, .feature-legend i.sys-buy_and_hold {
+  display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.sys-adaptive_tiered { background: var(--accent); }
+.sys-adaptive_binary { background: var(--other); }
+.sys-buy_and_hold { background: repeating-linear-gradient(90deg, var(--ink-2) 0 4px, transparent 4px 7px); }
+.feature-legend i.dash { width: 14px; height: 0; border-top: 1.5px dashed var(--muted); background: none; }
+
+/* exposure: ordinal, one hue (cash = empty, half = light, full = solid) + icon and label, never color alone */
+.expo { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid var(--accent); }
+.expo-0 { background: var(--surface); color: var(--ink); }
+.expo-50 { background: var(--active); color: var(--ink); }
+.expo-100 { background: var(--accent); color: #fff; }
+.decision-card { margin-top: 16px; }
+.risk-box { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.rule-note { font-size: 11.5px; color: var(--ink-2); background: var(--surface-2); border-radius: 8px; padding: 6px 10px; margin: 6px 0 12px; }
+.callout { display: grid; grid-template-columns: 1fr minmax(240px, 1fr); gap: 8px 20px; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 14px; background: var(--hover); }
+.callout.expo-bg-0 { border-left-color: var(--ink-2); background: var(--surface-2); }
+.callout-big { font-size: 20px; font-weight: 700; margin: 6px 0 4px; display: flex; align-items: center; gap: 10px; }
+.callout-big .expo { font-size: 16px; padding: 3px 12px; }
+.callout-big .muted { font-size: 13px; font-weight: 500; }
+.callout-why { font-size: 13px; color: var(--ink-2); }
+.callout-kv { margin-top: 0; align-self: center; }
+.callout-warn { grid-column: 1 / -1; margin: 0; padding-left: 0; list-style: none; font-size: 12.5px; color: var(--ink); }
+.callout-warn li { margin: 2px 0; }
+.callout-foot { grid-column: 1 / -1; margin: 0; }
+.tape-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-top: 16px; }
+.tape-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 22px; margin-top: 4px; }
+.expo-cell { border-radius: 3px; border: 1px solid var(--accent); min-width: 0; }
+.expo-cell.expo-0 { background: var(--surface); }
+.expo-cell.expo-50 { background: var(--active); }
+.expo-cell.expo-100 { background: var(--accent); }
+.tape-axis { display: flex; justify-content: space-between; margin-top: 2px; }
+.tape-table td { white-space: nowrap; }
+.tape-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; border-top: 1px solid var(--grid); padding-top: 10px; }
+.modes-table tr.cur td { font-weight: 700; color: var(--accent); }
+@media (max-width: 1100px) { .dp-tiles { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) {
+  .dp-tiles, .callout, .tape-summary { grid-template-columns: 1fr; }
+  .risk-box { align-items: flex-start; }
+}

@@ -26,6 +26,10 @@
     regimeRange: "All",
     heroChart: false,
     showOriginal: false,
+    riskMode: "balanced",  // decision layer: moves the tape's thresholds only, never the portfolio view
+    decisionTape: {},      // "SYM|mode" -> /api/decision/tape/{symbol}
+    decisionToken: 0,
+    decisionPortfolio: null, // /api/decision/portfolio (fixed at Balanced)
   };
 
   const VERDICT = {
@@ -315,7 +319,8 @@
         </div>
         <p class="explain"><b>How it works.</b> Each day is described by ${Object.keys(m.current_features).length} indicators that use only past data: return and volume z-scores, volatility regime, gaps, momentum, RSI, Bollinger %B and recent shock counts. The target is whether a move larger than ${set.threshold}σ happens within the next ${set.horizon} days. A ${modelName} learns which combinations of indicators came before such moves; the score is its probability, balanced so that 50 means "as likely as average".</p>
         <p class="explain"><b>Read with care.</b> Markets are noisy, so even good scores are probabilities, not certainties. Volatility tends to cluster, which is mostly what the model picks up. Compare precision with the base rate: precision above the base rate means the alerts add information.</p>
-      </div>`;
+      </div>
+      <div id="decision-card"></div>`;
 
     drawPrice(d);
     drawRisk(d);
@@ -324,6 +329,7 @@
     renderTable();
     bindDetailEvents();
     renderRegimeCard(s.symbol.toUpperCase());
+    renderDecisionPanel(d);
   }
 
   function plotBase() {
@@ -921,6 +927,276 @@
     if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
   }
 
+  // ---------- decision layer (results/decision.json + the rule in backend/decision.py) ----------
+  const RISK_LABELS = { conservative: "Conservative", balanced: "Balanced", aggressive: "Aggressive" };
+  const SYSTEM_LABELS = { adaptive_tiered: "Adaptive, tiered (0 / ½ / 1)", adaptive_binary: "Adaptive, binary (0 / 1)", buy_and_hold: "Buy and hold" };
+  const SYSTEM_COLORS = () => ({ adaptive_tiered: css("--accent"), adaptive_binary: css("--other"), buy_and_hold: css("--ink-2") });
+  const HARD_RULE_NOTE = "The rule is a hard mapping (0 / 0.5 / 1) from a soft signal. The slider moves the hard boundaries. The paper shows soft routing beats hard routing — continuous exposure is future work, not a claim we make.";
+  const spct = (v, d = 1) => (v == null ? "–" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(d)}%`);
+  const expoName = (e) => (e === 0 ? "Cash" : e === 0.5 ? "Half" : e === 1 ? "Full" : "–");
+  const expoChip = (e) => `<span class="expo expo-${e * 100}" title="Exposure ${e}">${{ 0: "○", 50: "◐", 100: "●" }[e * 100] ?? ""} ${expoName(e)}</span>`;
+  const ruleState = (reason) => (reason || "").split(" ")[0].replace("calm/normal", "calm / normal");
+
+  async function renderDecisionPanel(d) {
+    const sym = d.summary.symbol.toUpperCase();
+    const key = `${sym}|${state.riskMode}`;
+    if (state.decisionTape[key]) { drawDecisionPanel(sym, state.decisionTape[key]); return; }
+    const el = $("#decision-card");
+    if (!el) return;
+    if (!el.innerHTML) el.innerHTML = `<div class="card decision-card"><h2>Decision layer</h2><p class="unavailable">Loading the decision tape…</p></div>`;
+    else el.style.opacity = 0.6;
+    const token = ++state.decisionToken;
+    let t;
+    try {
+      t = await api(`/api/decision/tape/${encodeURIComponent(sym)}?mode=${state.riskMode}`);
+      state.decisionTape[key] = t;  // cache successes only, so a transient error can be retried
+    } catch (e) {
+      t = { error: e.message };
+    }
+    if (token !== state.decisionToken || !$("#decision-card") || state.detail?.summary?.symbol?.toUpperCase() !== sym) return;
+    drawDecisionPanel(sym, t);
+  }
+
+  function drawDecisionPanel(sym, t) {
+    const el = $("#decision-card");
+    if (!el) return;
+    el.style.opacity = 1;
+    const selector = `<div class="seg" id="risk-mode" role="radiogroup" aria-label="Risk tolerance">${Object.entries(RISK_LABELS).map(([k, l]) =>
+      `<button role="radio" aria-checked="${k === state.riskMode}" data-mode="${k}" class="${k === state.riskMode ? "active" : ""}">${l}</button>`).join("")}</div>`;
+    const head = `<div class="card-head"><div><h2>Decision layer: what the rule would have done</h2>
+      <p class="sub">Turns the volatility forecast into an exposure for ${esc(sym)}. It does not predict direction.</p></div>
+      <div class="risk-box"><span class="label-sm">Risk tolerance</span>${selector}</div></div>
+      <p class="rule-note">${HARD_RULE_NOTE}</p>`;
+    if (t.error) {
+      el.innerHTML = `<div class="card decision-card">${head}<p class="unavailable">${esc(t.error)}</p></div>`;
+      bindRiskMode();
+      return;
+    }
+    const L = t.latest, cfg = t.config, c = t.counts;
+    const signalNote = L.reason.startsWith("hold") ? ` (rule signal: ${expoName(L.signal)}, ${esc(L.signal_reason)})` : "";
+    const calNote = t.is_crypto
+      ? `Uses every day with a forecast (${c.days.toLocaleString()}).`
+      : `Uses the ${c.days.toLocaleString()} days the portfolio backtest kept, out of ${t.all_days.toLocaleString()} with a forecast. The backtest's price join has no stock returns on Mondays and the day after holidays, so those days are skipped here too, to stay consistent with it.`;
+    el.innerHTML = `
+      <div class="card decision-card">
+        ${head}
+        <div class="callout expo-bg-${L.exposure * 100}">
+          <div class="callout-main">
+            <div class="label-sm">Latest available observation · ${esc(L.date)}</div>
+            <div class="callout-big">${expoChip(L.exposure)} <span class="muted">exposure ${L.exposure}</span></div>
+            <div class="callout-why">Reason: <b>${esc(L.reason)}</b>${signalNote}</div>
+          </div>
+          <div class="kv callout-kv">
+            <span class="k">Forecast volatility (RG-ResMoE)</span><span class="v">${pctv(L.forecast, 1)}</span>
+            <span class="k">Realized, last 20 days</span><span class="v">${pctv(L.realized, 1)}</span>
+            <span class="k" title="Realized ÷ forecast. Above 1 means the market is moving more than the model expected.">Surprise (realized ÷ forecast)</span><span class="v">${L.surprise.toFixed(2)}×</span>
+            <span class="k">Rule state</span><span class="v">${esc(ruleState(L.reason))}</span>
+          </div>
+          ${L.warnings.length ? `<ul class="callout-warn">${L.warnings.map((w) => `<li>⚠ ${esc(w)}</li>`).join("")}</ul>` : ""}
+          <p class="small muted callout-foot">This is the last day in the out-of-sample forecast file, not a live signal. It is a simulated rule, not financial advice.</p>
+        </div>
+
+        <div class="tape-head">
+          <h3 class="mini-h">Decision tape, last ${t.rows.length} days</h3>
+          <span class="small muted">${RISK_LABELS[t.mode]}: half exposure at <b>${cfg.choppy_surprise}×</b>, cash at <b>${cfg.stress_surprise}×</b> · min. hold ${cfg.min_hold_days} days · ${t.switches_recent} switch${t.switches_recent === 1 ? "" : "es"} in this window</span>
+        </div>
+        <div class="tape-strip" role="img" aria-label="Exposure per day, oldest to newest">${t.rows.map((r) =>
+          `<span class="expo-cell expo-${r.exposure * 100}" title="${r.date}: ${expoName(r.exposure)} (${esc(r.reason)})"></span>`).join("")}</div>
+        <div class="tape-axis small muted"><span>${esc(t.rows[0].date)}</span><span>oldest → newest</span><span>${esc(L.date)}</span></div>
+        <div class="feature-legend" style="margin-top:10px"><span><i style="background:var(--accent)"></i>Surprise (realized ÷ forecast)</span><span><i class="dash"></i>Rule boundaries for ${RISK_LABELS[t.mode]}</span><span>${expoChip(1)} ${expoChip(0.5)} ${expoChip(0)}</span></div>
+        <div id="tape-chart" style="height:220px"></div>
+
+        <details class="advanced">
+          <summary>Day-by-day log (newest first)</summary>
+          <div class="table-wrap"><table class="compare plain tape-table"><thead><tr><th>Date</th><th>Forecast</th><th>Realized 20d</th><th>Surprise</th><th>Exposure</th><th>Reason</th></tr></thead><tbody>
+            ${[...t.rows].reverse().map((r) => `<tr><td>${r.date}</td><td class="num">${pctv(r.forecast, 1)}</td><td class="num">${pctv(r.realized, 1)}</td><td class="num">${r.surprise.toFixed(2)}×</td><td>${expoChip(r.exposure)}</td><td>${esc(r.reason)}</td></tr>`).join("")}
+          </tbody></table></div>
+        </details>
+
+        <div class="tape-summary">
+          <div><div class="label-sm">Full history under ${RISK_LABELS[t.mode]} (${esc(t.first_date)} → ${esc(L.date)})</div>
+            <p class="small" style="margin:4px 0 0"><b>${c.days.toLocaleString()}</b> days · <b>${c.cash}</b> cash · <b>${c.half}</b> half · <b>${c.full.toLocaleString()}</b> full</p></div>
+          <div><div class="label-sm">Same history, each risk mode</div>
+            <table class="compare plain modes-table"><thead><tr><th></th><th title="choppy / stress surprise thresholds">Thresholds</th><th>Cash</th><th>Half</th><th>Full</th></tr></thead><tbody>
+              ${Object.entries(t.modes).map(([k, m]) => `<tr class="${k === t.mode ? "cur" : ""}"><td>${RISK_LABELS[k]}</td><td class="num">${m.config.choppy_surprise}× / ${m.config.stress_surprise}×</td><td class="num">${m.counts.cash}</td><td class="num">${m.counts.half}</td><td class="num">${m.counts.full}</td></tr>`).join("")}
+            </tbody></table></div>
+        </div>
+        <p class="small muted" style="margin:8px 0 0">Risk tolerance only moves the two surprise thresholds of the existing rule. It does not retrain or change the forecast, and the portfolio backtest above always uses Balanced (half at ${t.modes.balanced.config.choppy_surprise}×, cash at ${t.modes.balanced.config.stress_surprise}×, ${t.modes.balanced.config.min_hold_days}-day hold). Only Balanced has been backtested; the other modes have no performance claim. ${calNote}</p>
+      </div>`;
+    drawTapeChart(t);
+    bindRiskMode();
+  }
+
+  function bindRiskMode() {
+    const seg = $("#risk-mode");
+    if (!seg) return;
+    seg.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-mode]");
+      if (!b || b.dataset.mode === state.riskMode || !state.detail) return;
+      state.riskMode = b.dataset.mode;
+      renderDecisionPanel(state.detail);  // tape + callout only; the portfolio view is untouched
+    });
+  }
+
+  function drawTapeChart(t) {
+    if (!$("#tape-chart")) return;
+    const rows = t.rows, cfg = t.config;
+    const fill = { 0: css("--surface"), 0.5: css("--active"), 1: css("--accent") };
+    const ys = rows.map((r) => r.surprise);
+    const top = Math.max(cfg.stress_surprise, ...ys) * 1.08;
+    const line = (y, name) => ({ type: "line", xref: "paper", x0: 0, x1: 1, y0: y, y1: y, line: { color: css("--muted"), width: 1, dash: "dash" }, name });
+    Plotly.react("tape-chart", [{
+      type: "scatter", mode: "lines+markers", x: rows.map((r) => r.date), y: ys,
+      line: { color: css("--accent"), width: 2 },
+      marker: { size: 9, color: rows.map((r) => fill[r.exposure]), line: { color: css("--accent"), width: 1.5 } },
+      customdata: rows.map((r) => [expoName(r.exposure), r.reason]),
+      hovertemplate: "Surprise %{y:.2f}× · %{customdata[0]} (%{customdata[1]})<extra></extra>",
+    }], {
+      ...plotBase(), margin: { l: 44, r: 70, t: 8, b: 28 },
+      xaxis: (() => {
+        const step = $("#tape-chart").clientWidth < 520 ? 10 : 5;
+        const ticks = rows.map((r) => r.date).filter((_, i) => (rows.length - 1 - i) % step === 0);
+        const short = (d) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        return axis({ type: "category", tickangle: 0, tickvals: ticks, ticktext: ticks.map(short) });
+      })(),
+      yaxis: axis({ range: [Math.min(0.5, ...ys) * 0.95, top], ticksuffix: "×", title: { text: "Surprise", font: { size: 11 } } }),
+      shapes: [line(cfg.choppy_surprise), line(cfg.stress_surprise)],
+      annotations: [[cfg.choppy_surprise, "half"], [cfg.stress_surprise, "cash"]].map(([y, txt]) => ({
+        xref: "paper", x: 1, xanchor: "left", y, yanchor: "middle", text: `${txt} ≥ ${y}×`, showarrow: false, font: { size: 11, color: css("--ink-2") },
+      })),
+    }, plotCfg);
+  }
+
+  async function loadDecisionPortfolio() {
+    const el = $("#decision-portfolio");
+    el.hidden = false;
+    el.innerHTML = `<div class="dp-head"><span class="core-badge dp-badge">Decision layer</span><h2>Does acting on the forecast pay?</h2><span class="muted">Loading the portfolio backtest…</span></div>`;
+    try {
+      state.decisionPortfolio = await api("/api/decision/portfolio");
+      renderDecisionPortfolio(state.decisionPortfolio);
+    } catch (e) {
+      el.innerHTML = `<div class="dp-head"><span class="core-badge dp-badge">Decision layer</span><h2>Does acting on the forecast pay?</h2><span class="muted">Unavailable: ${esc(e.message)}</span></div>`;
+    }
+  }
+
+  function renderDecisionPortfolio(p) {
+    const el = $("#decision-portfolio");
+    const S = p.systems, order = ["adaptive_tiered", "adaptive_binary", "buy_and_hold"];
+    const tr = S.adaptive_tiered, bh = S.buy_and_hold;
+    const tradeoff = tr.ann_return < bh.ann_return && tr.ann_vol < bh.ann_vol && tr.max_drawdown > bh.max_drawdown;
+    // [key, label, format, higher is better, tooltip]
+    const cols = [
+      ["net_return", "Cumulative", (v) => spct(v, 0), true, "Compounded net return over the whole period, after costs"],
+      ["ann_return", "Annual return", (v) => spct(v), true, "Mean daily net return × 252 (arithmetic, not compounded)"],
+      ["ann_vol", "Volatility", (v) => pct(v), false, "Std. dev. of daily net returns × √252"],
+      ["sharpe", "Sharpe", (v) => v.toFixed(2), true, "Annual return ÷ volatility, no risk-free rate"],
+      ["max_drawdown", "Max drawdown", (v) => pct(v), true, "Worst peak-to-trough fall of the equity curve"],
+      ["turnover", "Turnover / yr", (v) => v.toFixed(1), false, "Sum of |change in exposure| per year (1 = one full switch in or out)"],
+      ["cost_drag", "Cost / yr", (v) => pct(v, 2), false, `Turnover × ${p.cost_bps} bps one-way`],
+    ];
+    const best = Object.fromEntries(cols.map(([k, , , hi]) => [k, (hi ? Math.max : Math.min)(...order.map((s) => S[s][k]))]));
+    const fm = p.forecast, fmRow = (label, m, sw) => m ? `<tr><td>${sw}${label}</td><td class="num">${m.ic.toFixed(3)}</td><td class="num">${m.rmse.toFixed(3)}</td><td class="num">${m.r2.toFixed(3)}</td><td class="num">${m.qlike.toFixed(3)}</td></tr>` : "";
+    const be = p.cost_curve.breakeven;
+    const beText = (s) => `${SYSTEM_LABELS[s]}: annual return reaches zero at <b>${be[s].zero_return_bps != null ? `${be[s].zero_return_bps} bps` : "no cost in range"}</b>; ${be[s].matches_buy_and_hold_bps != null ? `matches buy-and-hold at ${be[s].matches_buy_and_hold_bps} bps` : "it stays below buy-and-hold at every cost ≥ 0 (no break-even vs. buy-and-hold)"}.`;
+    el.innerHTML = `
+      <div class="dp-head"><span class="core-badge dp-badge">Decision layer</span><h2>Does acting on the forecast pay?</h2>
+        <span class="muted">Portfolio backtest · ${p.assets} assets, equal weight · ${esc(p.period.start)} → ${esc(p.period.end)} · Balanced rule · ${p.cost_bps} bps one-way · 1-day execution lag</span></div>
+      <div class="dp-tiles">
+        ${order.map((s) => `<div class="hero-tile"><div class="label"><i class="swatch-line sys-${s}"></i>${SYSTEM_LABELS[s]}</div>
+          <div class="dp-big">${spct(S[s].ann_return)}<span class="muted"> / yr</span></div>
+          <div class="note">Max drawdown <b>${pct(S[s].max_drawdown)}</b> · volatility <b>${pct(S[s].ann_vol)}</b> · Sharpe <b>${S[s].sharpe.toFixed(2)}</b></div></div>`).join("")}
+        <div class="hero-tile"><div class="label">The trade-off, measured</div>
+          <div class="note">${tradeoff
+            ? `Buy-and-hold earned the most. The tiered rule gave up <b>${((bh.ann_return - tr.ann_return) * 100).toFixed(1)} pts</b> of annual return for <b>${((bh.ann_vol - tr.ann_vol) * 100).toFixed(1)} pts</b> less volatility and a <b>${((tr.max_drawdown - bh.max_drawdown) * 100).toFixed(1)} pts</b> shallower worst drawdown. It manages risk; it does not beat the market here.`
+            : `Compare the three systems metric by metric below: no system is best on every measure.`}</div></div>
+      </div>
+      <details class="hero-more" id="decision-more" ${store.get("anomality.decisionMore", false) ? "open" : ""}>
+        <summary><span class="when-closed">Strategy comparison, forecast quality, regimes and costs</span><span class="when-open">Hide the decision-layer details</span></summary>
+
+        <section class="report-sec">
+          <h3>1. Portfolio performance (what you would have earned)</h3>
+          <div class="table-scroll"><table class="compare plain dp-table"><thead><tr><th>System</th>${cols.map(([, l, , , tip]) => `<th title="${esc(tip)}">${l}</th>`).join("")}</tr></thead><tbody>
+            ${order.map((s) => `<tr><td><i class="swatch-line sys-${s}"></i>${SYSTEM_LABELS[s]}</td>${cols.map(([k, , f]) => `<td class="num${S[s][k] === best[k] ? " best" : ""}">${f(S[s][k])}</td>`).join("")}</tr>`).join("")}
+          </tbody></table></div>
+          <p class="small muted">Bold blue = best on that column only. Hover a column name for its definition. ${S.buy_and_hold.n_days.toLocaleString()} trading days, the same period, costs and execution lag for all three systems.</p>
+        </section>
+
+        <section class="report-sec">
+          <h3>2. Forecast quality (how well the volatility forecast matched what happened)</h3>
+          <div class="hero-more-grid">
+            <div class="table-scroll"><table class="compare plain"><thead><tr><th>Forecast</th><th title="Rank correlation between forecast and realized volatility across assets, averaged over days. Higher is better.">IC ↑</th><th title="Root mean squared error in annualized volatility. Lower is better.">RMSE ↓</th><th title="Share of variance in realized volatility explained. Higher is better.">R² ↑</th><th title="Loss that penalizes under-forecasting risk more than over-forecasting. Lower is better.">QLIKE ↓</th></tr></thead><tbody>
+              ${fmRow("RG-ResMoE, log inputs (ours)", fm.ours, '<i class="swatch log"></i>')}
+              ${fmRow("RG-ResMoE, original inputs", fm.original, '<i class="swatch raw"></i>')}
+              ${fmRow('Simple estimate (last month\'s volatility)', fm.simple, "")}
+            </tbody></table></div>
+            <p class="small muted" style="margin:0">These measure the <b>forecast</b>, not the portfolio: a better forecast does not by itself mean higher returns (section 1). All ${fm.ours.n.toLocaleString()} out-of-sample forecasts, 3-seed average (the forecast the app serves), floored at 3%. The research write-up reports per-seed averages, so its numbers are slightly lower. The two RG-ResMoE versions are close; the gain over the simple estimate is the larger effect.</p>
+          </div>
+        </section>
+
+        <section class="report-sec">
+          <h3>3. By market regime (Balanced rule)</h3>
+          <div class="table-scroll"><table class="compare plain dp-table"><thead><tr><th>Regime</th><th>Days</th><th title="Average portfolio exposure (1 = fully invested)">Exposure, tiered</th><th>Exposure, binary</th><th title="Share of asset-days in cash / half / full under the tiered rule">Tiered mix: cash · half · full</th><th title="Average realized ÷ forecast volatility">Mean surprise</th><th title="Forecast RMSE: ours vs. simple estimate">RMSE ours / simple</th><th title="Forecast QLIKE: ours vs. simple estimate">QLIKE ours / simple</th></tr></thead><tbody>
+            ${p.regimes.map((r) => r.days ? `<tr><td>${esc(r.label)}</td><td class="num">${r.days}</td><td class="num">${r.exposure.adaptive_tiered.toFixed(2)}</td><td class="num">${r.exposure.adaptive_binary.toFixed(2)}</td>
+              <td class="num">${pctv(r.tiered_mix.cash)} · ${pctv(r.tiered_mix.half)} · ${pctv(r.tiered_mix.full)}</td><td class="num">${r.mean_surprise.toFixed(2)}×</td>
+              <td class="num">${r.forecast.ours.rmse.toFixed(3)} / ${r.forecast.simple.rmse.toFixed(3)}</td><td class="num">${r.forecast.ours.qlike.toFixed(3)} / ${r.forecast.simple.qlike.toFixed(3)}</td></tr>`
+              : `<tr><td>${esc(r.label)}</td><td colspan="7" class="muted">No data in this window</td></tr>`).join("")}
+          </tbody></table></div>
+          <p class="small muted">Regime windows are the fixed date ranges in <code>backend/regime_slices.py</code>, not a model prediction. Per-regime <b>returns and drawdowns</b> need daily prices that are not shipped with the app (<code>data/processed/prices.parquet</code>); reproduce them with <code>python -m backend.regime_slices</code>. The rule de-risks most in the COVID crash, where the model was surprised most.</p>
+        </section>
+
+        <section class="report-sec">
+          <h3>4. Transaction-cost sensitivity</h3>
+          <div class="hero-more-grid">
+            <div>
+              <div class="feature-legend">${order.map((s) => `<span><i class="sys-${s}"></i>${SYSTEM_LABELS[s]}</span>`).join("")}</div>
+              <div id="cost-chart" style="height:250px"></div>
+            </div>
+            <div>
+              <ul class="trust">${["adaptive_tiered", "adaptive_binary"].map((s) => `<li>${beText(s)}</li>`).join("")}</ul>
+              <p class="small muted">Annual return here is the arithmetic mean of daily net returns × 252. Because each day's cost is turnover × cost, it moves exactly linearly with cost, so the curve is computed from <code>results/decision.json</code> without re-running anything. Compounded return, drawdown and Sharpe at other costs need a re-run (<code>python -m backend.cost_sensitivity</code>). No <code>sensitivity.csv</code> is stored in the repository.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="report-sec">
+          <h3>5. Method and caveats</h3>
+          <ul class="trust dp-caveats">
+            <li>Rule: surprise = realized 20-day volatility ÷ forecast. Cash at ≥ ${p.config.stress_surprise}×, half at ≥ ${p.config.choppy_surprise}×, otherwise full; a new exposure is held for at least ${p.config.min_hold_days} days. No training, fully logged.</li>
+            <li>The backtest kept ${p.rows.backtest.toLocaleString()} of ${p.rows.forecasts.toLocaleString()} forecast rows. Stocks and ETFs have returns on ${p.stock_days.kept.toLocaleString()} of ${p.stock_days.all.toLocaleString()} days (Mondays and the day after holidays are missing after the price join); crypto keeps every day. On those missing days the equal-weight portfolio holds only the ${p.crypto_assets} crypto assets.</li>
+            <li>Simulated, not live: no slippage beyond the flat cost, no taxes. Past results do not guarantee future returns. This is not financial advice.</li>
+          </ul>
+        </section>
+      </details>`;
+    el.hidden = false;
+    const more = $("#decision-more");
+    more.addEventListener("toggle", () => { store.set("anomality.decisionMore", more.open); if (more.open) drawCostChart(p); });
+    if (more.open) drawCostChart(p);
+  }
+
+  function drawCostChart(p) {
+    if (!$("#cost-chart")) return;
+    const cc = p.cost_curve, col = SYSTEM_COLORS();
+    const order = ["adaptive_tiered", "adaptive_binary", "buy_and_hold"];
+    const traces = order.map((s) => ({
+      type: "scatter", mode: "lines", x: cc.bps, y: cc.ann_return[s].map((v) => v * 100), name: SYSTEM_LABELS[s],
+      line: { color: col[s], width: 2, dash: s === "buy_and_hold" ? "dash" : "solid" },
+      hovertemplate: `${SYSTEM_LABELS[s]}: %{y:.1f}%/yr<extra></extra>`,
+    }));
+    const zero = cc.breakeven.adaptive_tiered.zero_return_bps;
+    if (zero != null && zero <= cc.bps[cc.bps.length - 1]) traces.push({ type: "scatter", mode: "markers", x: [zero], y: [0], marker: { size: 9, color: col.adaptive_tiered, line: { color: css("--surface"), width: 2 } }, hovertemplate: `Tiered reaches 0%/yr at ${zero} bps<extra></extra>` });
+    const last = cc.bps.length - 1;
+    Plotly.react("cost-chart", traces, {
+      ...plotBase(), margin: { l: 48, r: 12, t: 22, b: 40 },
+      xaxis: axis({ title: { text: "One-way cost (bps)", font: { size: 11 } } }),
+      yaxis: axis({ ticksuffix: "%", title: { text: "Annual return", font: { size: 11 } }, zeroline: true, zerolinecolor: css("--axis") }),
+      shapes: [{ type: "line", xref: "x", yref: "paper", x0: p.cost_bps, x1: p.cost_bps, y0: 0, y1: 1, line: { color: css("--muted"), width: 1, dash: "dot" } }],
+      annotations: [
+        { x: p.cost_bps, xref: "x", y: 1, yref: "paper", yanchor: "bottom", text: `backtest (${p.cost_bps} bps)`, showarrow: false, font: { size: 10, color: css("--muted") }, xanchor: "left" },
+        ...order.map((s) => ({ x: cc.bps[last], y: cc.ann_return[s][last] * 100, xanchor: "right", yanchor: s === "adaptive_tiered" ? "top" : "bottom", text: { adaptive_tiered: "tiered", adaptive_binary: "binary", buy_and_hold: "buy & hold" }[s], showarrow: false, font: { size: 11, color: css("--ink-2") } })),
+      ],
+    }, plotCfg);
+  }
+
   // ---------- controls ----------
   function syncOutputs() {
     $("#threshold-out").textContent = `${(+$("#threshold").value).toFixed(1)}σ`;
@@ -1003,11 +1279,13 @@
       applyTheme(next); store.set("anomality.theme", next);
       if (state.detail && $("#price-chart")) renderDetail(state.detail);
       if (state.market) renderHero(state.market);
+      if (state.decisionPortfolio) renderDecisionPortfolio(state.decisionPortfolio);
     });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.detail && $("#price-chart")) renderDetail(state.detail); });
 
     state.heroChart = store.get("anomality.heroChart", false);
     loadMarket();
+    loadDecisionPortfolio();
     api("/api/watchlist").then((w) => {
       state.lists = { stocks: w.stocks, crypto: w.crypto };
       renderWatchlist();

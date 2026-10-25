@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .analysis import FEATURES, DecisionModel, Settings, detect, features
 from .data import DataError, load_prices
+from .decision_view import RISK_MODES, DecisionUnavailable, portfolio as decision_portfolio, tape as decision_tape
 from .regime_service import RegimeUnavailable, plain_asset, plain_market
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -173,6 +174,24 @@ def api_regime(symbol: str):
     try:
         return _clean(plain_asset(symbol))
     except RegimeUnavailable as e:
+        raise HTTPException(404, str(e))
+
+
+@app.get("/api/decision/portfolio")
+def api_decision_portfolio():
+    """Decision-layer backtest (fixed at the Balanced rule): strategy comparison, cost curve, regimes."""
+    try:
+        return _clean(decision_portfolio())
+    except DecisionUnavailable as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/decision/tape/{symbol}")
+def api_decision_tape(symbol: str, mode: str = Query("balanced", pattern=f"^({'|'.join(RISK_MODES)})$")):
+    """Per-asset decision tape under a risk-tolerance mode (moves the rule's thresholds only)."""
+    try:
+        return _clean(decision_tape(symbol, mode))
+    except DecisionUnavailable as e:
         raise HTTPException(404, str(e))
 
 
