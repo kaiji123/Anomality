@@ -36,6 +36,12 @@ KINDS = {
     "limits": "Summarize the limits and uncertainties of these analyses.",
 }
 SECTIONS = ("measured_facts", "interpretation", "uncertainties", "missing_information")
+# The exact answer shape, sent to Gemini as its response schema: without it the model wrote some sections
+# as plain strings, which `validate` rejected, so the app fell back to the facts.
+_ITEM = {"type": "OBJECT", "properties": {"text": {"type": "STRING"}, "fact_ids": {"type": "ARRAY", "items": {"type": "STRING"}}},
+         "required": ["text", "fact_ids"]}
+RESPONSE_SCHEMA = {"type": "OBJECT", "properties": {k: {"type": "ARRAY", "items": _ITEM} for k in SECTIONS},
+                   "required": list(SECTIONS), "propertyOrdering": list(SECTIONS)}
 CACHE_TTL = 3600
 MAX_ITEMS, MAX_CHARS = 8, 600
 
@@ -213,6 +219,8 @@ def validate(raw: str, facts: List[dict]) -> dict:
     for k in SECTIONS:
         items = []
         for it in data[k][:MAX_ITEMS]:
+            if isinstance(it, str) and k != "measured_facts":  # a plain sentence: an item that cites no fact
+                it = {"text": it, "fact_ids": []}         # (its numbers are still checked below)
             if not isinstance(it, dict) or not isinstance(it.get("text"), str) or not it["text"].strip():
                 raise AnalystError("invalid_response", f"An item in '{k}' has no text.")
             cites = it.get("fact_ids") or []
@@ -280,7 +288,8 @@ def call_gemini(kind: str, facts: List[dict], api_key: str, model: str, timeout:
     body = {
         "systemInstruction": {"parts": [{"text": p["system"]}]},
         "contents": [{"role": "user", "parts": [{"text": p["user"]}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500, "responseMimeType": "application/json"},
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500, "responseMimeType": "application/json",
+                             "responseSchema": RESPONSE_SCHEMA},
     }
     try:
         res = post(ENDPOINT.format(model=model), json=body, timeout=timeout,

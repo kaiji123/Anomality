@@ -1530,6 +1530,32 @@
       <span class="muted">Deterministic monitors on the forecasts, inputs and prices, each with its measurement, threshold and source.</span>${extra}</div>`;
   }
 
+  // Most severe first, then the longest running.
+  const AL_RANK = { critical: 0, warning: 1, info: 2 };
+  const alOrder = (a, b) => (AL_RANK[a.severity] ?? 3) - (AL_RANK[b.severity] ?? 3) || (a.first_seen < b.first_seen ? -1 : a.first_seen > b.first_seen ? 1 : 0);
+
+  // An alert's measurement in plain units, how far past its threshold it is, and a gauge (0..100%).
+  // Every monitor alerts when its value reaches the threshold or more.
+  function alMeasure(a) {
+    const v = a.observed_value, t = a.threshold, u = (a.unit || "").toLowerCase();
+    if (v == null) return { value: "–", over: "", limit: "", gauge: null };
+    let value, limit, over;
+    if (u.includes("share")) {
+      value = `${(v * 100).toFixed(1)}%`; limit = `${Math.round(t * 100)}%`; over = `${((v - t) * 100).toFixed(1)} pts over`;
+    } else if (u.includes("÷") || u.includes("ratio")) {
+      value = `${v.toFixed(2)}×`; limit = `${t}×`; over = v >= t ? `alert at ${t}×` : `under ${t}×`;
+    } else if (u.includes("day")) {
+      value = `${Math.round(v)} days`; limit = `${t} days`; over = `alert at ${t} days`;
+    } else if (u === "psi") {
+      value = `PSI ${v.toFixed(2)}`; limit = `${t}`; over = `major shift from ${t}`;
+    } else {
+      value = `${Math.round(v)} ${a.unit}`; limit = `${t}`; over = t ? `alert above ${t}` : "should be 0";
+    }
+    // a gauge only where the threshold is a level (not "should be zero")
+    const gauge = t ? (() => { const max = u.includes("share") ? 1 : Math.max(t * 1.6, v * 1.08); return { v: Math.min(100, (v / max) * 100), t: (t / max) * 100 }; })() : null;
+    return { value, limit, over, gauge };
+  }
+
   function renderAlerts() {
     const r = state.al.data, f = state.al, el = $("#alerts");
     const open = (a) => a.status !== "resolved";
@@ -1538,28 +1564,45 @@
     const nOpen = r.alerts.filter(open).length;
     const sel = (id, cur, opts) => `<select id="${id}">${opts.map(([v, l]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`).join("")}</select>`;
     const val = (v, unit) => (v == null ? "–" : `${Number.isInteger(v) ? v : v.toFixed(3)}${unit ? ` <span class="muted">${esc(unit)}</span>` : ""}`);
-    const card = (a) => `
+    const card = (a) => {
+      const m = alMeasure(a);
+      return `
       <li class="al-item sev-${a.severity} st-${a.status}">
-        <div class="al-top">
-          <span class="al-sev">${AL_SEV[a.severity].icon} ${AL_SEV[a.severity].label}</span>
-          <b class="al-title">${esc(a.title)}</b>
-          <span class="al-type">${esc(AL_TYPES[a.type] || a.type)}</span>
-          <span class="al-status">${AL_STATUS[a.status]}${a.status === "resolved" ? ` on ${esc(a.resolved_on)}` : ""}</span>
+        <div class="al-main">
+          <div class="al-top">
+            <span class="al-sev">${AL_SEV[a.severity].icon} ${AL_SEV[a.severity].label}</span>
+            <b class="al-title">${esc(a.title)}</b>
+            <span class="al-type">${esc(AL_TYPES[a.type] || a.type)}</span>
+            <span class="al-status">${AL_STATUS[a.status]}${a.status === "resolved" ? ` on ${esc(a.resolved_on)}` : ""}</span>
+          </div>
+          <p class="al-desc">${esc(a.description)}</p>
+          ${m.gauge ? `<div class="al-gauge" title="Measured ${esc(m.value)}; alerts at ${esc(m.limit)}">
+            <span class="al-g-over" style="left:${m.gauge.t}%"></span><span class="al-g-fill" style="width:${m.gauge.v}%"></span>
+            <span class="al-g-tick" style="left:${m.gauge.t}%"><i>alert at ${esc(m.limit)}</i></span></div>` : ""}
+          <div class="al-meta">
+            <span>${esc(a.scope)}</span>
+            <span>${a.first_seen === a.last_seen ? `On ${esc(a.first_seen)}` : `Since ${esc(a.first_seen)} · last ${esc(a.last_seen)}`}</span>
+            ${a.status === "active" ? `<button class="link-btn al-ack" data-id="${esc(a.id)}">Mark as seen</button>` : ""}
+            ${a.acknowledged_at ? `<span class="muted">seen ${esc(a.acknowledged_at.replace("T", " "))}</span>` : ""}
+          </div>
+          <details class="al-ev"><summary>Evidence and source</summary>
+            <p class="small muted">Source: ${esc(a.source)} · id <code>${esc(a.id)}</code></p>
+            <pre>${esc(JSON.stringify(a.evidence, null, 1))}</pre>
+          </details>
         </div>
-        <p class="al-desc">${esc(a.description)}</p>
-        <div class="al-meta">
-          <span>Measured: <b>${val(a.observed_value, a.unit)}</b></span>
-          ${a.threshold != null ? `<span>Threshold: <b>${val(a.threshold)}</b></span>` : ""}
-          <span>Scope: ${esc(a.scope)}</span>
-          <span>${a.first_seen === a.last_seen ? `On ${esc(a.first_seen)}` : `${esc(a.first_seen)} → ${esc(a.last_seen)}`}</span>
-          ${a.status === "active" ? `<button class="link-btn al-ack" data-id="${esc(a.id)}">Mark as seen</button>` : ""}
-          ${a.acknowledged_at ? `<span class="muted">seen ${esc(a.acknowledged_at.replace("T", " "))}</span>` : ""}
-        </div>
-        <details class="al-ev"><summary>Evidence and source</summary>
-          <p class="small muted">Source: ${esc(a.source)} · id <code>${esc(a.id)}</code></p>
-          <pre>${esc(JSON.stringify(a.evidence, null, 1))}</pre>
-        </details>
+        <div class="al-num"><b>${esc(m.value)}</b><span>${esc(m.over)}</span></div>
       </li>`;
+    };
+    // the summary: counts by severity and the one alert that matters most
+    const opened = r.alerts.filter(open).sort(alOrder);
+    const counts = ["critical", "warning", "info"].map((s) => [s, opened.filter((a) => a.severity === s).length]).filter(([, n]) => n);
+    const top = opened[0];
+    const summary = top
+      ? `<div class="al-summary sev-${top.severity}">
+          <div class="al-counts">${counts.map(([s, n]) => `<span class="al-count sev-${s}">${AL_SEV[s].icon} ${n} ${AL_SEV[s].label.toLowerCase()}</span>`).join("")}</div>
+          <p><b>${esc(top.title)}</b> <span class="muted">since ${esc(top.first_seen)}</span> · ${esc(top.description)}</p>
+        </div>`
+      : `<div class="al-summary sev-ok"><p><b>✓ All clear on ${esc(r.as_of)}.</b> <span class="muted">No open alerts; all ${r.checks.length} monitors were checked.</span></p></div>`;
     const statusIcon = { ok: "✓", alert: "⚑", insufficient_data: "…" };
     el.innerHTML = `${alHead()}
       <div class="al-bar">
@@ -1572,9 +1615,10 @@
         <label>Status ${sel("al-status", f.status, [["open", "Open"], ["resolved", `Resolved (last ${r.config.lookback_days} days)`], ["all", "All"]])}</label>
       </div>
       <p class="small muted" style="margin:8px 0 10px">${esc(r.note)} Evaluated with data available on ${esc(r.as_of)} only. <span id="al-error" class="down"></span></p>
+      ${summary}
       <div id="al-body">
-        ${list.length ? `<ul class="al-list">${list.map(card).join("")}</ul>`
-          : `<p class="al-empty">${nOpen === 0 && f.status === "open" ? `✓ No open alerts on ${esc(r.as_of)}: all ${r.checks.length} monitors were checked.` : "No alerts match these filters."}</p>`}
+        ${list.length ? `<ul class="al-list">${list.slice().sort(alOrder).map(card).join("")}</ul>`
+          : nOpen === 0 && f.status === "open" ? "" : `<p class="al-empty">No alerts match these filters.</p>`}
         <details class="hero-more al-checks">
           <summary><span class="when-closed">All ${r.checks.length} monitors on ${esc(r.as_of)}, including those with too little data</span><span class="when-open">Hide the monitors</span></summary>
           <div class="table-scroll"><table class="compare plain dec-tbl">

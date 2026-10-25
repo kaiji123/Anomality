@@ -716,6 +716,39 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .al-ev summary { cursor: pointer; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .al-ev pre { font-size: 11px; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; overflow-x: auto; max-height: 220px; margin: 4px 0 0; }
 .al-empty { font-size: 13px; color: var(--good-text); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; margin: 0; }
+/* alerts that stand out: summary bar, severity-tinted cards, a big number and a measured-vs-threshold gauge */
+.al-item, .al-summary { --sev: var(--axis); --sev-ink: var(--ink-2); }
+.sev-info { --sev: var(--accent); --sev-ink: var(--accent); }
+.sev-warning { --sev: var(--warning); --sev-ink: #8a5d00; }
+.sev-critical { --sev: var(--critical); --sev-ink: var(--critical); }
+.sev-ok { --sev: var(--good); --sev-ink: var(--good-text); }
+:root[data-theme="dark"] .sev-warning { --sev-ink: var(--warning); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sev-warning { --sev-ink: var(--warning); } }
+.al-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 10px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sev) 45%, transparent); border-left: 6px solid var(--sev);
+  background: color-mix(in srgb, var(--sev) 12%, var(--surface)); }
+.al-summary p { margin: 0; font-size: 14px; flex: 1 1 420px; }
+.al-summary p b { color: var(--sev-ink); }
+.al-counts { display: flex; gap: 6px; }
+.al-count { font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; color: #fff; background: var(--sev); white-space: nowrap; }
+.al-count.sev-warning { color: #3d2a00; }
+.al-item { display: flex; gap: 16px; align-items: stretch; border-left-width: 6px; border-left-color: var(--sev);
+  background: color-mix(in srgb, var(--sev) 6%, var(--surface)); padding: 11px 14px; }
+.al-main { flex: 1; min-width: 0; }
+.al-sev { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; color: #fff; background: var(--sev); }
+.sev-warning .al-sev { color: #3d2a00; }
+.al-title { font-size: 15px; }
+.al-num { flex: 0 0 auto; min-width: 128px; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; text-align: right;
+  padding-left: 14px; border-left: 1px solid var(--grid); }
+.al-num b { font-size: 26px; line-height: 1.1; color: var(--sev-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.al-num span { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.al-gauge { position: relative; height: 8px; margin: 22px 0 8px; border-radius: 4px; background: var(--surface-2); max-width: 520px; }
+.al-g-over { position: absolute; top: 0; bottom: 0; right: 0; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--sev) 16%, transparent); }
+.al-g-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--sev); }
+.al-g-tick { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--ink); }
+.al-g-tick i { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 2px; font-style: normal; font-size: 10.5px; color: var(--ink-2); white-space: nowrap; }
+.al-meta { font-size: 11.5px; color: var(--muted); }
+@media (max-width: 700px) { .al-item { flex-direction: column; gap: 6px; } .al-num { align-items: flex-start; text-align: left; padding-left: 0; border-left: 0; } }
 .al-checks { margin-top: 10px; }
 .al-checks tr.ck-alert td:nth-child(3) { font-weight: 700; }
 .al-checks tr.ck-insufficient_data td { color: var(--muted); }
