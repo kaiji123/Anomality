@@ -629,3 +629,12 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 }
 #anom-table td:first-child { white-space: nowrap; }
 .saved-tag { color: var(--ink-2); background: var(--surface-2); border-radius: 4px; padding: 0 5px; }
+
+/* decision layer: significance check under the backtest headline (backend/significance.py) */
+.dec-sig { font-size: 12px; color: var(--ink-2); margin-top: 8px; padding: 6px 9px; border-radius: 7px; border: 1px dashed var(--axis); }
+.dec-sig b { color: var(--ink); }
+.dec-sig .muted { display: block; margin-top: 3px; font-size: 11px; }
+.dec-robust { margin-top: 10px; }
+.dec-robust .report-sec h3 { font-size: 13.5px; }
+.dec-robust td.num, .dec-robust th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-scroll { overflow-x: auto; }

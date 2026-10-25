@@ -52,6 +52,12 @@ async function page(browser, opts) {
   check("Try-it slider cuts to half when the mood is Stormy", (await p.textContent("#rule-result")).includes("Half invested"));
   await p.click('#dec-period button[data-p="2022 bear market"]');
   check("Period buttons update the backtest story", (await p.textContent("#dec-table")).includes("2022 bear market"));
+  await p.waitForFunction(() => /95% range/.test(document.querySelector("#dec-sig")?.textContent || ""), null, T);
+  check("Backtest headline shows the significance check", /More than luck/.test(await p.textContent("#dec-sig")));
+  await p.click("#dec-robust summary");
+  await p.waitForFunction(() => /QLIKE/.test(document.querySelector("#dec-robust-body")?.textContent || ""), null, T);
+  const robustText = await p.textContent("#dec-robust-body");
+  check("Robustness section shows costs, conventions and forecast quality", /0\.20%/.test(robustText) && /true buy-and-hold basket/.test(robustText) && /QLIKE/.test(robustText));
   await p.click("#dec-prev");
   check("Previous rule can be added for comparison", (await p.$$("#dec-table tbody tr")).length === 3);
   await p.waitForSelector("#decision-card .pos.lg", T);

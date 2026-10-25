@@ -134,6 +134,50 @@ We present 90% / half because 90% is the app's own Stormy band, not because it s
 Costs (`python -m backend.cost_sensitivity`): net return +585% / +579% / +573% / +561% at
 0 / 5 / 10 / 20 bps; worst drop −30.1% to −30.9%; Sharpe 1.38 to 1.35.
 
+### Is the edge more than luck?
+
+`python -m backend.significance` resamples the two systems' daily net returns *together*
+(paired, so shared market moves cancel) in blocks of consecutive days (keeps volatility
+clustering), 5,000 times with a fixed seed:
+
+| Block length | Sharpe gap (rule − buy and hold) | 95% interval | Annual return gap | 95% interval |
+|---|---|---|---|---|
+| 5 days | +0.15 | −0.05 to +0.37 | −0.4 pts | −4.0 to +3.3 |
+| **20 days** | **+0.15** | **−0.07 to +0.39** | **−0.4 pts** | **−4.1 to +3.7** |
+| 60 days | +0.15 | −0.05 to +0.36 | −0.4 pts | −3.1 to +2.2 |
+
+**Neither gap is statistically clear**: every interval includes zero (for the Sharpe gap, 9–16%
+of resamples are at or below zero). The higher *compounded* growth (+579% vs. +568%) comes
+from smaller swings (less volatility drag), not from a higher average daily return, which is
+slightly lower. The honest reading is "similar return with smaller drops", not "beats the
+market".
+
+**Selection caveat.** The mood rule was adopted after the first rule was seen to lag
+buy-and-hold on this same period, so this backtest is not a clean hold-out test of the rule
+choice. The 90% threshold is the app's own Stormy band rather than a tuned value, which
+limits but does not remove that bias. A fair test is to run the rule unchanged on data after
+October 2026.
+
+### What "buy and hold" means here, and other portfolio conventions
+
+The backtest's "buy and hold" is an **equal-weight portfolio of the assets that have a forecast
+that day, rebalanced back to equal weights every day, with the rebalancing trades not
+charged**. SOL-USD (from 2020-10-29) and AVAX-USD (from 2021-04-14) join when their
+forecasts start; no asset has a missing day after it starts. `python -m backend.robustness`
+re-runs the same positions under three other conventions (5 bps, full period):
+
+| Convention | Mood rule | Buy and hold |
+|---|---|---|
+| A. Published: assets present that day, daily rebalancing free | +579%, Sharpe 1.37, worst −30.3% | +568%, 1.22, −34.2% |
+| B. Only the 54 assets present from day one | +506%, 1.36, −28.2% | +502%, 1.20, −34.2% |
+| C. B, weights left to drift (a true buy-and-hold basket) | +534%, 0.80, −66.1% | +455%, 0.75, −70.5% |
+| D. B, daily rebalancing charged (3.7× the portfolio a year) | +498%, 1.35, −28.4% | +487%, 1.19, −34.2% |
+
+The rule's higher reward / risk holds under all four, and charging for rebalancing changes
+little (D vs. B). Convention C is a different portfolio: left alone, the basket drifts into
+the crypto assets that rose most, so it is twice as volatile with a −70% worst drop. Read
+"buy and hold" in this document and in the app as "equal weight, rebalanced daily".
+
 ## How we checked it
 
 Beyond the unit tests, a review on the real data (Oct 24, 2026) confirmed:
@@ -189,6 +233,8 @@ python -m backend.run_decision          # comparison of the three systems -> res
 python -m backend.regime_slices         # four market phases
 python -m backend.cost_sensitivity      # edge vs. cost (0/5/10/20 bps)
 python -m backend.sensitivity           # robustness to the Stormy threshold and the cut
+python -m backend.significance          # is the edge over buy-and-hold more than luck? (block bootstrap)
+python -m backend.robustness            # re-priced at 0-50 bps, four portfolio conventions, forecast IC/RMSE/R2/QLIKE
 python -m backend.portfolio_view NVDA   # the rule's daily tape through today, plus one asset
 pytest tests/test_decision.py           # 14 tests: both rules, causality, costs, no double counting
 ```

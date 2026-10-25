@@ -31,6 +31,8 @@
     decAsset: {},        // symbol -> /api/decision/{symbol}
     decPeriod: "all",
     decPrev: false,
+    decSig: undefined,   // /api/decision/significance (bootstrap check of the rule vs. buy and hold)
+    decRobust: null,     // /api/decision/robustness, fetched when the section is first opened
     ruleTry: null,       // slider value; starts at today's storminess
   };
 
@@ -1019,9 +1021,34 @@
       if (state.ruleTry == null) state.ruleTry = p.today.storm ?? 0.5;
       renderDecisionBand(p);
       renderWatchlist();
+      loadDecisionSignificance();
     } catch (e) {
       console.warn("Decision layer unavailable:", e.message);
     }
+  }
+
+  // Is the rule's edge over buy and hold more than luck? (backend/significance.py)
+  async function loadDecisionSignificance() {
+    if (state.decSig && !state.decSig.error) return;
+    try {
+      state.decSig = await api("/api/decision/significance");
+    } catch (e) {
+      state.decSig = { error: e.message };
+    }
+    const el = $("#dec-sig");
+    if (el) el.innerHTML = sigHtml();
+  }
+
+  function sigHtml() {
+    const s = state.decSig;
+    if (s === undefined) return `<span class="muted">Checking whether the edge is more than luck…</span>`;
+    if (s.error) return `<span class="muted">Significance check unavailable: ${esc(s.error)}</span>`;
+    const sh = s.sharpe_diff, ar = s.ann_return_diff, clear = sh.ci95[0] > 0;
+    const pts = (v) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}`;
+    return `<b>${clear ? "✓ More than luck?" : "⚠ More than luck? Not proven."}</b>
+      Reward / risk gap ${sh.observed > 0 ? "+" : ""}${sh.observed.toFixed(2)}, 95% range <b>${sh.ci95[0].toFixed(2)} to ${sh.ci95[1] > 0 ? "+" : ""}${sh.ci95[1].toFixed(2)}</b>${clear ? "" : " (includes zero)"}.
+      Average yearly return ${pts(ar.observed)} pts vs. buy and hold (range ${pts(ar.ci95[0])} to ${pts(ar.ci95[1])}).
+      <span class="muted">${s.n_boot.toLocaleString()} paired resamples of ${s.block_days}-day blocks. The rule was chosen after seeing this period, so this is not a hold-out test.</span>`;
   }
 
   function renderDecisionBand(p) {
@@ -1065,6 +1092,7 @@
           </div>
           ${rc && bc ? `<div class="dec-crash">In the COVID crash it fell <b>${drop(rc.max_drawdown)}</b> at worst, vs. <b>${drop(bc.max_drawdown)}</b> for buy and hold.</div>` : ""}
           <div class="note"><b>${verdict}</b> The worst fall was ${ddDiff}% ${smallerDrop ? "shallower" : "deeper"}, with ${rr.sharpe >= bh.sharpe ? "more" : "less"} return per unit of risk (${rr.sharpe.toFixed(2)} vs. ${bh.sharpe.toFixed(2)}). It acts in only the stormiest weeks, so its edge comes from a handful of storms. Scored only on forecasts the model never saw, after trading costs.</div>
+          <div class="dec-sig" id="dec-sig">${sigHtml()}</div>
         </div>
       </div>
       <div class="dec-bt">
@@ -1085,6 +1113,10 @@
           <div id="dec-table"></div>
         </div>
         <p class="small muted dec-foot">Each day the rule sets one position for every asset from that day's mood; it's traded at the next day's close (no peeking ahead), with ${(rule.cost_bps / 100).toFixed(2)}% trading costs, ${esc(p.since)} to ${esc(p.through)}. Past results don't guarantee future ones, and this is not financial advice. <a class="hero-link" href="${DECISION_DOCS}" target="_blank" rel="noopener">How the backtest works ↗</a></p>
+        <details class="hero-more dec-robust" id="dec-robust">
+          <summary><span class="when-closed">Robustness: trading costs and forecast quality</span><span class="when-open">Hide the robustness checks</span></summary>
+          <div id="dec-robust-body">${robustHtml()}</div>
+        </details>
       </div>`;
     el.hidden = false;
     updateRuleTry();
@@ -1101,7 +1133,77 @@
       drawBacktest(p);
     });
     $("#dec-prev").addEventListener("change", (e) => { state.decPrev = e.target.checked; drawBacktest(p); });
+    $("#dec-robust").addEventListener("toggle", (e) => { if (e.target.open) loadDecisionRobustness(); });
     drawBacktest(p);
+  }
+
+  // Trading costs and forecast quality (backend/robustness.py). Loaded when first opened.
+  async function loadDecisionRobustness() {
+    if (state.decRobust && !state.decRobust.error) return;
+    state.decRobust = undefined;
+    const body = $("#dec-robust-body");
+    if (body) body.innerHTML = robustHtml();
+    try {
+      state.decRobust = await api("/api/decision/robustness");
+    } catch (e) {
+      state.decRobust = { error: e.message };
+    }
+    const el = $("#dec-robust-body");
+    if (el) el.innerHTML = robustHtml();
+  }
+
+  function robustHtml() {
+    const r = state.decRobust;
+    if (r === undefined) return `<p class="unavailable">Re-running the backtest at other trading costs and scoring the forecasts (about 15 seconds the first time)…</p>`;
+    if (r === null) return "";
+    if (r.error) return `<p class="unavailable">Robustness checks unavailable: ${esc(r.error)}</p>`;
+    const c = r.costs, names = Object.keys(c.systems);
+    const be = r.growth_breakeven_bps;
+    const f = r.forecast, MODEL = { ours: "RG-ResMoE, log inputs (ours)", original: "RG-ResMoE, original inputs", simple: "Simple estimate (last month)" };
+    const fmt = (v, d = 3) => (v == null ? "–" : v.toFixed(d));
+    const all = f?.periods?.all;
+    const bestOf = (k, lower) => all && (lower ? Math.min : Math.max)(...f.models.map((m) => all[m][k]));
+    const cell = (m, k, lower) => `<td class="num${all[m][k] === bestOf(k, lower) ? " best" : ""}">${fmt(all[m][k])}</td>`;
+    return `
+      <section class="report-sec">
+        <h3>Trading costs</h3>
+        <div class="table-scroll"><table class="compare plain dec-tbl">
+          <thead><tr><th>One-way cost</th>${c.bps.map((b) => `<th class="num">${(b / 100).toFixed(2)}%${b === 5 ? " ★" : ""}</th>`).join("")}</tr></thead>
+          <tbody>${names.map((n) => `<tr><td><i class="swatch" style="background:${sysColor(n)}"></i>${SYS_SHORT[n]}</td>${c.systems[n].map((x) =>
+            `<td class="num">${growth(x.net_return)}<br><span class="muted small">reward/risk ${x.sharpe.toFixed(2)}</span></td>`).join("")}</tr>`).join("")}</tbody>
+        </table></div>
+        <p class="small muted" style="margin:6px 0 0">★ = the cost used everywhere else. Each column is a full re-run of the same positions with that cost on every trade. ${be != null
+          ? `The rule's extra <b>growth</b> over buy and hold disappears above <b>${(be / 100).toFixed(3)}%</b> per trade (${be} bps); its reward / risk stays higher at every cost shown.`
+          : "The rule never out-grows buy and hold in this cost range."}</p>
+      </section>
+      ${r.conventions?.C ? `<section class="report-sec">
+        <h3>What "buy and hold" means here</h3>
+        <div class="table-scroll"><table class="compare plain dec-tbl">
+          <thead><tr><th>Portfolio convention</th><th class="num">Mood rule</th><th class="num">Buy and hold</th></tr></thead>
+          <tbody>${[["A", `Published: equal weight over the ${r.conventions.assets.A} assets present that day, rebalanced daily for free`],
+            ["B", `Only the ${r.conventions.assets.fixed} assets present from day one`],
+            ["C", "Same, weights left to drift (a true buy-and-hold basket)"],
+            ["D", "Same as B, daily rebalancing trades charged"]].map(([k, label]) => `<tr><td>${k}. ${esc(label)}</td>${["mood_rule", "buy_and_hold"].map((n) => {
+              const v = r.conventions[k][n];
+              return `<td class="num">${growth(v.net_return)}<br><span class="muted small">reward/risk ${v.sharpe.toFixed(2)} · worst ${drop(v.max_drawdown)}</span></td>`;
+            }).join("")}</tr>`).join("")}</tbody>
+        </table></div>
+        <p class="small muted" style="margin:6px 0 0">The rule's higher reward / risk holds under every convention. "Buy and hold" in this app means equal weight, rebalanced daily; a basket left to drift ends up dominated by the crypto that rose most, with far bigger drops.</p>
+      </section>` : ""}
+      ${all ? `<section class="report-sec">
+        <h3>Forecast quality (the forecast, not the portfolio)</h3>
+        <div class="table-scroll"><table class="compare plain dec-tbl">
+          <thead><tr><th>Forecast</th><th class="num" title="Rank correlation between forecast and realized volatility across assets, averaged over days. Higher is better.">IC ↑</th><th class="num" title="Root mean squared error, annualized volatility. Lower is better.">RMSE ↓</th><th class="num" title="Share of the variation in realized volatility the forecast explains. Higher is better.">R² ↑</th><th class="num" title="Loss that penalizes under-forecasting risk more than over-forecasting. Lower is better.">QLIKE ↓</th></tr></thead>
+          <tbody>${f.models.map((m) => `<tr><td>${MODEL[m]}</td>${cell(m, "ic")}${cell(m, "rmse", true)}${cell(m, "r2")}${cell(m, "qlike", true)}</tr>`).join("")}</tbody>
+        </table></div>
+        <div class="table-scroll"><table class="compare plain dec-tbl" style="margin-top:10px">
+          <thead><tr><th>Market phase</th><th class="num">RMSE, ours / simple</th><th class="num">QLIKE, ours / simple</th><th class="num">Forecasts</th></tr></thead>
+          <tbody>${Object.entries(f.periods).filter(([k]) => k !== "all").map(([k, v]) => v.ours
+            ? `<tr><td>${esc(k)}</td><td class="num">${fmt(v.ours.rmse)} / ${fmt(v.simple.rmse)}</td><td class="num">${fmt(v.ours.qlike)} / ${fmt(v.simple.qlike)}</td><td class="num">${v.ours.n.toLocaleString()}</td></tr>`
+            : `<tr><td>${esc(k)}</td><td colspan="3" class="muted">No forecasts in this phase</td></tr>`).join("")}</tbody>
+        </table></div>
+        <p class="small muted" style="margin:6px 0 0">All ${all.ours.n.toLocaleString()} out-of-sample forecasts, 3-seed average, floored at 3%; every model is scored on the same rows. A better forecast does not by itself mean a better portfolio. The two RG-ResMoE versions are close; the gain over the simple estimate is the larger effect.</p>
+      </section>` : ""}`;
   }
 
   function updateRuleTry() {

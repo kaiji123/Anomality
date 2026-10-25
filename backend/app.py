@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from .analysis import FEATURES, DecisionModel, Settings, detect, features
 from .data import DataError, load_prices
 from .data import status as data_status
-from . import decision_service
+from . import decision_service, robustness, significance
 from .regime_service import RegimeUnavailable, plain_asset, plain_market
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -188,6 +188,24 @@ def api_regime(symbol: str):
 def api_decision_portfolio():
     try:
         return _clean(decision_service.plain_portfolio())
+    except decision_service.DecisionUnavailable as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/decision/significance")  # before /api/decision/{symbol}, which would capture it
+def api_decision_significance():
+    """Mood rule vs. buy-and-hold: paired block-bootstrap intervals for the Sharpe and return gaps."""
+    try:
+        return _clean(significance.mood_vs_buy_and_hold())
+    except (decision_service.DecisionUnavailable, ValueError) as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/decision/robustness")  # before /api/decision/{symbol}, which would capture it
+def api_decision_robustness():
+    """Backtest re-priced at other trading costs, and forecast quality (IC, RMSE, R², QLIKE)."""
+    try:
+        return _clean(robustness.report())
     except decision_service.DecisionUnavailable as e:
         raise HTTPException(503, str(e))
 
