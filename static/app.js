@@ -1361,7 +1361,8 @@
     }
     const m = state.tm.meta, syms = m.assets.map((a) => a.symbol);
     state.tm.symbol = syms.includes(state.selected) ? state.selected : syms.includes("NVDA") ? "NVDA" : syms[0];
-    state.tm.date = m.last;
+    // open on the COVID crash, where the time machine shows the most; "Latest" is one click away
+    state.tm.date = m.presets.find((p) => /covid/i.test(p.label))?.date || m.last;
     renderTimeMachineShell();
     loadTimeMachineView();
   }
@@ -1419,7 +1420,7 @@
 
   function renderTimeMachineView(v) {
     if (v.status !== "ok") return `<p class="unavailable">${esc(v.note)}</p>`;
-    const k = v.known, o = v.outcome, d = k.decision, mr = d.mood_rule, pr = d.previous_rule, t = v.timing;
+    const k = v.known, o = v.outcome, d = k.decision, mr = d.mood_rule, t = v.timing;
     const pv = (x, dd = 1) => (x == null ? "–" : `${(x * 100).toFixed(dd)}%`);
     const outcome = o.status === "complete" ? `
         <div class="kv">
@@ -1447,10 +1448,10 @@
           </div>
           <div class="tm-decision">
             <div><span class="label-sm">Mood rule (the app's rule)</span><div>${posChip(mr.level, true)} <span class="small">${esc(mr.reason)}</span></div></div>
-            <div><span class="label-sm">Previous rule (surprise)</span><div>${pr ? `${posChip(pr.level)} <span class="small">${esc(pr.reason)}</span>` : `<span class="small muted">cannot be rebuilt (missing inputs)</span>`}</div></div>
           </div>
           <p class="small muted tm-prov">${esc(d.provenance)} ${mr.matches_backtest ? "✓ Same position as the backtest on that day." : mr.matches_backtest === false ? "⚠ Differs from the backtest on that day." : ""}
-            Decided ${esc(t.forecast_and_decision)}, traded ${esc(t.traded ?? "–")}, first return ${esc(t.first_return ?? "–")}.</p>
+            Decided ${esc(t.forecast_and_decision)}, traded ${esc(t.traded ?? "–")}, first return ${esc(t.first_return ?? "–")}.
+            No later prices are used, but the rule itself was picked after seeing 2019–2026, so this is not an untouched hold-out.</p>
           ${k.flags.length ? `<ul class="tm-flags">${k.flags.map((f) => `<li>⚠ ${esc(f)}</li>`).join("")}</ul>` : ""}
         </div>
         <div class="tm-after">
