@@ -1515,6 +1515,7 @@
       return;
     }
     state.al.data = r; state.al.date = date;
+    updateAssistBadge(r);
     renderAlerts();
   }
 
@@ -1528,6 +1529,61 @@
   function alHead(extra = "") {
     return `<div class="hero-head"><span class="core-badge al">⚑ Alerts</span><h2>Intelligent Alerts &amp; Drift Detection</h2>
       <span class="muted">Deterministic monitors on the forecasts, inputs and prices, each with its measurement, threshold and source.</span>${extra}</div>`;
+  }
+
+  // ---------- assistant bubble: it asks what the user wants to see, then opens that tool in a large panel ----------
+  const ASSIST_TOOLS = { tm: "Historical Time Machine", al: "Alerts", an: "AI market analyst" };
+
+  function initAssist() {
+    const fab = $("#assist-fab"), panel = $("#assist");
+    const show = (open) => {
+      panel.hidden = !open;
+      fab.setAttribute("aria-expanded", String(open));
+      fab.classList.toggle("open", open);
+      if (open) askAssist();  // every time it opens, it asks first
+    };
+    fab.addEventListener("click", () => show(panel.hidden));
+    $("#assist-close").addEventListener("click", () => show(false));
+    $("#assist-back").addEventListener("click", askAssist);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden && !$("#levels-modal").open) show(false); });
+    panel.querySelector(".assist-choices").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-tab]"); if (b) openAssistTool(b.dataset.tab);
+    });
+  }
+
+  // the question: a small chat window with the three choices
+  function askAssist() {
+    const panel = $("#assist");
+    panel.dataset.mode = "chat"; panel.dataset.tab = "";
+    $("#assist-back").hidden = true;
+    $("#assist-title").textContent = "anomality assistant";
+    panel.querySelector(".assist-choices button")?.focus({ preventScroll: true });
+  }
+
+  // the answer: the panel grows and shows only the chosen tool
+  function openAssistTool(tab) {
+    const panel = $("#assist");
+    panel.dataset.mode = "view"; panel.dataset.tab = tab;
+    $("#assist-back").hidden = false;
+    $("#assist-title").textContent = ASSIST_TOOLS[tab];
+    panel.querySelector(".assist-body").scrollTop = 0;
+    // a Plotly chart drawn while it was hidden has no width: draw it again now that it shows
+    if (tab === "tm" && state.tm.view?.series && $("#tm-chart")) {
+      requestAnimationFrame(() => { drawTimeMachine(state.tm.view); Plotly.Plots.resize("tm-chart"); });
+    }
+  }
+
+  // the bubble's badge: open warnings and critical alerts on the latest day (info alerts don't count)
+  function updateAssistBadge(r) {
+    const open = r.alerts.filter((a) => a.status !== "resolved");
+    const loud = open.filter((a) => a.severity === "critical" || a.severity === "warning");
+    const badge = $("#assist-badge");
+    if (!state.al.date) {
+      badge.hidden = !loud.length;
+      badge.textContent = loud.length;
+      badge.className = `assist-badge${loud.some((a) => a.severity === "critical") ? " crit" : ""}`;
+    }
+    $("#assist-al-n").textContent = open.length ? open.length : "";
   }
 
   // Most severe first, then the longest running.
@@ -1909,6 +1965,7 @@
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.detail && $("#price-chart")) renderDetail(state.detail); });
 
     state.heroChart = store.get("anomality.heroChart", false);
+    initAssist();
     loadMarket();
     loadDecisionPortfolio();
     loadTimeMachine();

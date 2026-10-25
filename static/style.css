@@ -716,6 +716,52 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .al-ev summary { cursor: pointer; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .al-ev pre { font-size: 11px; background: var(--surface-2); border-radius: 6px; padding: 6px 8px; overflow-x: auto; max-height: 220px; margin: 4px 0 0; }
 .al-empty { font-size: 13px; color: var(--good-text); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; margin: 0; }
+/* tools bubble: a round button bottom-right opens one panel with the Time Machine, alerts and the AI analyst */
+.assist-fab { position: fixed; right: 24px; bottom: 24px; z-index: 60; width: 60px; height: 60px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; color: #fff; background: var(--accent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.12); transition: transform .18s ease, box-shadow .18s ease; }
+.assist-fab:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26); }
+.assist-fab.open { transform: rotate(-8deg) scale(.94); }
+.assist-badge { position: absolute; top: -3px; right: -3px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; color: #3d2a00; background: var(--warning); border: 2px solid var(--surface); }
+.assist-badge.crit { color: #fff; background: var(--critical); }
+/* chat mode: a small window that asks; view mode: the chosen tool in a large panel */
+.assist { position: fixed; right: 24px; bottom: 96px; z-index: 59; display: flex; flex-direction: column;
+  background: var(--page); border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24), 0 4px 14px rgba(0, 0, 0, 0.1); transform-origin: bottom right; animation: assist-in .22s ease-out; }
+.assist[data-mode="chat"] { width: min(380px, calc(100vw - 48px)); }
+.assist[data-mode="view"] { width: min(1040px, calc(100vw - 48px)); height: min(84vh, 920px); animation: assist-grow .24s ease-out; }
+.assist[hidden] { display: none; }
+@keyframes assist-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes assist-grow { from { opacity: .4; transform: scale(.96); } to { opacity: 1; transform: none; } }
+.assist-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.assist-title { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 14px; min-width: 0; }
+.assist-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; color: #fff; background: var(--accent); flex: none; }
+.assist-back { padding: 4px 10px; }
+.assist-chat { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.assist-msg { margin: 0; max-width: 92%; padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.45; }
+.assist-msg.bot { align-self: flex-start; background: var(--surface-2); color: var(--ink); border-bottom-left-radius: 4px; }
+.assist-choices { display: flex; flex-direction: column; gap: 8px; }
+.assist-choices button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; cursor: pointer;
+  padding: 10px 13px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--surface); color: var(--ink); transition: background .15s, border-color .15s, transform .15s; }
+.assist-choices button:hover, .assist-choices button:focus-visible { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border-color: var(--accent); transform: translateX(2px); }
+.assist-choices b { font-size: 14px; color: var(--accent); }
+.assist-choices span { font-size: 12.5px; color: var(--ink-2); }
+.assist-tab-n:not(:empty) { margin-left: 4px; padding: 0 7px; border-radius: 9px; font-size: 11px; color: var(--ink-2); background: var(--surface-2); }
+.assist-body { flex: 1; overflow: auto; }
+.assist-body .hero { border-top: 0; border-bottom: 0; }
+.assist[data-mode="chat"] .assist-body, .assist[data-mode="view"] .assist-chat { display: none; }
+.assist[data-tab="tm"] #alerts, .assist[data-tab="tm"] #analyst,
+.assist[data-tab="al"] #time-machine, .assist[data-tab="al"] #analyst,
+.assist[data-tab="an"] #time-machine, .assist[data-tab="an"] #alerts { display: none; }
+@media (max-width: 700px) {
+  .assist[data-mode="chat"] { right: 16px; bottom: 88px; width: calc(100vw - 32px); }
+  .assist[data-mode="view"] { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; }
+  .assist-fab { right: 16px; bottom: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .assist { animation: none; } .assist-fab { transition: none; } }
+
 /* alerts that stand out: summary bar, severity-tinted cards, a big number and a measured-vs-threshold gauge */
 .al-item, .al-summary { --sev: var(--axis); --sev-ink: var(--ink-2); }
 .sev-info { --sev: var(--accent); --sev-ink: var(--accent); }
