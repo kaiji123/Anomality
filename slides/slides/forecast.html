@@ -1,0 +1,22 @@
+<section id="forecast" data-transition="fade" style="background:#F5F4EF;color:#15202B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:64px;font-weight:700;line-height:1.1">Forecasts that beat the simple method</h2>
+<div style="display:flex;gap:64px;flex:1">
+<div style="flex:1;display:flex;flex-direction:column;gap:24px">
+<table style="font-size:30px;color:#15202B">
+<tr><th style="width:28%;text-align:left">Score</th><th style="width:24%;text-align:right">Ours</th><th style="width:24%;text-align:right">Original</th><th style="width:24%;text-align:right">Simple</th></tr>
+<tr><td>R² ↑</td><td style="text-align:right;color:#1F63B8"><b>0.424</b></td><td style="text-align:right">0.420</td><td style="text-align:right">0.304</td></tr>
+<tr><td>RMSE ↓</td><td style="text-align:right;color:#1F63B8"><b>0.256</b></td><td style="text-align:right">0.257</td><td style="text-align:right">0.282</td></tr>
+<tr><td>QLIKE ↓</td><td style="text-align:right;color:#1F63B8"><b>0.684</b></td><td style="text-align:right">0.686</td><td style="text-align:right">0.738</td></tr>
+<tr><td>IC ↑</td><td style="text-align:right;color:#1F63B8"><b>0.634</b></td><td style="text-align:right">0.630</td><td style="text-align:right">0.607</td></tr>
+</table>
+<p style="font-size:24px;line-height:1.4;color:#4A5563">All 103,593 out-of-sample forecasts, May 2019 – Oct 2026, 3-seed average. Bold blue = best. “Simple” is last month’s volatility.</p>
+</div>
+<div style="width:560px;display:flex;flex-direction:column;gap:32px">
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:72px;font-weight:700;line-height:1;color:#1F63B8">29 of 30</p><p style="font-size:28px;color:#4A5563">test windows beat the simple estimate</p></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:72px;font-weight:700;line-height:1;color:#1F63B8">25 of 30</p><p style="font-size:28px;color:#4A5563">beat the original model (p &lt; 0.001)</p></div>
+<div style="display:flex;flex-direction:column;gap:4px"><p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:72px;font-weight:700;line-height:1;color:#1F63B8">23%</p><p style="font-size:28px;color:#4A5563">smaller misses than the simple estimate in the 2020 crash</p></div>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7480">Walk-forward test: retrained on a rolling window, scored only on weeks the model never saw. 56 assets.</p>
+<aside>The forecast explains about 40% more of the variation in next week’s volatility than the simple estimate: R² 0.42 versus 0.30. Overall averages for our model and the original are close, but ours wins consistently: 25 of the 30 test windows, which is very unlikely to be luck (p below 0.001). The biggest gains are in crashes.</aside>
+</section>

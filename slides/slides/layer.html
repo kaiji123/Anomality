@@ -1,0 +1,40 @@
+<section id="layer" data-transition="fade" style="background:#F5F4EF;color:#15202B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:48px">
+<h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:64px;font-weight:700;line-height:1.1">The decision layer: one question a day</h2>
+<div style="display:flex;gap:20px;align-items:center">
+<div style="flex:1;align-self:stretch;display:flex;flex-direction:column;gap:10px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600">1. Forecast</h3>
+<p style="font-size:24px;line-height:1.4;color:#4A5563">Next week’s volatility for all 56 assets, from our model</p>
+</div>
+<x-connector style="width:56px;color:#6B7480;border-width:3px"></x-connector>
+<div style="flex:1;align-self:stretch;display:flex;flex-direction:column;gap:10px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600">2. Market mood</h3>
+<p style="font-size:24px;line-height:1.4;color:#4A5563">Is this week busier than 90% of all earlier days? Past days only</p>
+</div>
+<x-connector style="width:56px;color:#6B7480;border-width:3px"></x-connector>
+<div style="flex:1;align-self:stretch;display:flex;flex-direction:column;gap:10px;background:#E3EEFB;border:2px solid #2A78D6;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600;color:#1F63B8">3. The rule</h3>
+<p style="font-size:24px;line-height:1.4;color:#15202B">Stormy: hold every asset at <b>half</b>. Otherwise: fully invested</p>
+</div>
+<x-connector style="width:56px;color:#6B7480;border-width:3px"></x-connector>
+<div style="flex:1;align-self:stretch;display:flex;flex-direction:column;gap:10px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:16px;padding:28px">
+<h3 style="font-size:30px;font-weight:600">4. Trade</h3>
+<p style="font-size:24px;line-height:1.4;color:#4A5563">At the next day’s close, 0.05% cost per trade. No peeking ahead</p>
+</div>
+</div>
+<div style="display:flex;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;border-top:4px solid #2A78D6;padding:24px 0px 0px 0px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:80px;font-weight:700;line-height:1;color:#1F63B8">1.37 <span style="color:#6B7480">vs 1.22</span></p>
+<p style="font-size:26px;line-height:1.4;color:#4A5563">return per unit of risk (Sharpe), rule vs. buy and hold</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;border-top:4px solid #2A78D6;padding:24px 0px 0px 0px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:80px;font-weight:700;line-height:1;color:#1F63B8">−21% <span style="color:#6B7480">vs −34%</span></p>
+<p style="font-size:26px;line-height:1.4;color:#4A5563">worst drop in the COVID crash</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;border-top:4px solid #2A78D6;padding:24px 0px 0px 0px">
+<p style="font-family:'Space Grotesk', Arial, sans-serif;font-size:80px;font-weight:700;line-height:1;color:#1F63B8">4%</p>
+<p style="font-size:26px;line-height:1.4;color:#4A5563">of days at half. No training, no tuning: the 90% line is the app’s own Stormy band</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7480">Backtest: 56 assets, May 2019 – Oct 2026, out-of-sample forecasts only. Growth is about the same: +579% vs. +568%.</p>
+<aside>The model forecasts; the decision layer acts. Every day it asks one question: is this week’s market forecast busier than 90% of all earlier days? If yes, the mood is Stormy and every asset is held at half; otherwise everything stays fully invested. It only compares with the past, and trades at the next day’s close after costs. Because it only steps in during the stormiest weeks, about 4% of days, it keeps the growth of buy and hold but takes much smaller falls: in the COVID crash −21% instead of −34%, and a higher return per unit of risk overall, 1.37 versus 1.22. The 90% line isn’t tuned; it’s the same Stormy band the app shows.</aside>
+</section>

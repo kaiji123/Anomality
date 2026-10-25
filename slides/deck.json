@@ -1,0 +1,19 @@
+{
+  "v": 4,
+  "createdOnFiles": {"v": 1, "at": "2026-10-25T12:00:00Z"},
+  "lists": "css",
+  "title": "anomality",
+  "cover": "cover",
+  "order": ["cover", "problem", "original", "failure", "ours", "layer", "system", "forecast", "decision", "product", "honest", "demo"],
+  "sections": {
+    "s1": {"description": "The problem: risk models break in a crash", "start": "cover"},
+    "s2": {"description": "Architecture: the original model, where it fails, our model, the decision layer and the full system", "start": "original"},
+    "s3": {"description": "Results: forecast quality and the decision layer", "start": "forecast"},
+    "s4": {"description": "The product, what we don’t claim, and the demo", "start": "product"}
+  },
+  "faces": {
+    "space-grotesk": {"family": "Space Grotesk", "href": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400..700&display=swap"},
+    "ibm-plex-sans": {"family": "IBM Plex Sans", "href": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap"}
+  },
+  "designSystems": []
+}

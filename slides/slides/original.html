@@ -1,0 +1,27 @@
+<section id="original" data-transition="fade" style="background:#F5F4EF;color:#15202B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:16px">
+<h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:64px;font-weight:700;line-height:1.1">The original model: RG-ResMoE</h2>
+<!-- A 0,0,700,96  B 964,0,700,96  C 0,200,400,96  D 520,200,400,96  E 1124,200,540,96  F 520,400,400,96  G 0,600,920,96  N 1124,520,540,176 -->
+<div style="position:relative;width:1664px;height:700px">
+<div style="position:absolute;left:0px;top:0px;width:700px;height:96px;background:#FBE9DF;border:2px solid #D9622B;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center"><b>1. Stock features x (16)</b><br>raw 5/20/60-day volatility, returns, RSI</p></div>
+<div style="position:absolute;left:964px;top:0px;width:700px;height:96px;background:#FBE9DF;border:2px solid #D9622B;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center"><b>2. Regime variables z (2)</b><br>raw market and stock-specific volatility</p></div>
+<div style="position:absolute;left:0px;top:200px;width:400px;height:96px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center"><b>3. Base network</b><br>trained first, then frozen</p></div>
+<div style="position:absolute;left:520px;top:200px;width:400px;height:96px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center"><b>4. Four correction experts</b><br>small networks, start at zero</p></div>
+<div style="position:absolute;left:1124px;top:200px;width:540px;height:96px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center"><b>5. Regime gate</b><br>sees x and z, picks expert weights</p></div>
+<div style="position:absolute;left:520px;top:400px;width:400px;height:96px;background:#FCFBF8;border:2px solid #9AA3AD;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center"><b>6. Weighted correction</b><br>Σ weight × expert</p></div>
+<div style="position:absolute;left:0px;top:600px;width:920px;height:96px;background:#15202B;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 20px"><p style="font-size:24px;line-height:1.3;text-align:center;color:#F5F4EF"><b>7. Forecast: next-5-day volatility</b><br>base forecast + weighted correction</p></div>
+<div style="position:absolute;left:1124px;top:520px;width:540px;height:176px;background:#FCFBF8;border:2px dashed #D9622B;border-radius:12px;display:flex;flex-direction:column;justify-content:center;padding:0px 28px"><p style="font-size:24px;line-height:1.35;color:#4A5563"><b style="color:#B44A17">The weak spot:</b> volatility goes in on a raw scale. Fine in normal markets; a crash lands far outside the training range.</p></div>
+<x-connector x1="350" y1="96" x2="350" y2="148" head="none" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="200" y1="148" x2="1200" y2="148" head="none" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="200" y1="148" x2="200" y2="200" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="720" y1="148" x2="720" y2="200" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="1200" y1="148" x2="1200" y2="200" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="1314" y1="96" x2="1314" y2="200" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="720" y1="296" x2="720" y2="400" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="1394" y1="296" x2="920" y2="448" route="vh" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="200" y1="296" x2="200" y2="600" style="color:#6B7480;border-width:3px"></x-connector>
+<x-connector x1="720" y1="496" x2="720" y2="600" style="color:#6B7480;border-width:3px"></x-connector>
+<p style="position:absolute;left:960px;top:460px;width:400px;font-size:24px;color:#4A5563">expert weights</p>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#6B7480">Ye &amp; Borde, “Regime-Gated Residual Mixture-of-Experts for Cross-Sectional Volatility Forecasting”, arXiv:2608.12251, ICAIF ’26. Diagram redrawn from the paper.</p>
+<aside>This is the published architecture. Stock features go to a frozen base network and four small correction experts. Only the gate sees the regime variables: market volatility and stock-specific volatility. It decides how much each expert’s correction counts. The paper’s point is that regime information should route corrections, not be an extra input. The weak spot, in orange, is that volatility goes in on a raw scale.</aside>
+</section>

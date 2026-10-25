@@ -1,0 +1,19 @@
+<section id="failure" data-transition="fade" style="background:#F5F4EF;color:#15202B;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;gap:40px">
+<h2 style="font-family:'Space Grotesk', Arial, sans-serif;font-size:64px;font-weight:700;line-height:1.1">In a crash, the original gate stops working</h2>
+<div style="display:flex;gap:64px;align-items:center;flex:1">
+<div style="background:#FCFBF8;border:1px solid #D8DBDF;border-radius:16px;padding:24px;display:flex">
+<img src="/_blob/c884dd3d4d3b0795ec33438f0ec95f4d" alt="Diagram: in the COVID crash, raw inputs put the market 11.7 standard deviations outside the training data and the gate herds 93% of stocks into one expert; log inputs bring it to 4.3 and the gate keeps routing stocks individually" style="width:710px;height:640px;object-fit:contain">
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<h3 style="font-size:36px;font-weight:600;color:#B44A17">Raw inputs (original)</h3>
+<p style="font-size:28px;line-height:1.4;color:#4A5563">The crash looks 11.7 standard deviations off the charts. The gate extrapolates and herds 93% of stocks into one expert, doing worse than a naive forecast.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<h3 style="font-size:36px;font-weight:600;color:#1F63B8">Log inputs (ours)</h3>
+<p style="font-size:28px;line-height:1.4;color:#4A5563">The same crash is 4.3 standard deviations out. The gate stays in familiar range, keeps judging stocks one by one, and beats the naive forecast.</p>
+</div>
+</div>
+</div>
+<aside>The fix is one line of maths: take the log of the volatility inputs before standardising. A shock of 102% versus a normal 20% is a five-times jump on a raw scale but a modest step on a log scale, so the gate never sees numbers wildly outside what it learned.</aside>
+</section>
