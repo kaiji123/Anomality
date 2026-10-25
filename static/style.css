@@ -659,3 +659,10 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .table-scroll { overflow-x: auto; }
 /* winner of a comparison inside a table cell (app.js winners()) */
 .dec-tbl b.win { font-weight: 700; color: var(--pos-full); }
+
+/* asset page: anomaly log on its own; the classic model folded into a baseline section */
+.glance { margin-bottom: 16px; }
+.anom-log { margin-top: 16px; }
+.baseline { margin-top: 16px; background: var(--surface-2); }
+.baseline-note { font-size: 13px; color: var(--ink-2); margin: 0 0 14px; max-width: 80ch; }
+.baseline .grid.top { margin-bottom: 16px; }

@@ -295,17 +295,7 @@
       <div id="decision-card"></div>
       ${s.synthetic ? `<div class="banner">⚠ Live data could not be fetched, so this shows <b>synthetic demo data</b>. Check your internet connection.</div>` : ""}
 
-      <div class="grid top">
-        <div class="card verdict">
-          <h2>Classic model verdict</h2>
-          <div class="score-row">
-            ${gauge(m.risk_score, m.verdict)}
-            <div class="big">Next ${set.horizon} day${set.horizon > 1 ? "s" : ""}<strong>${VERDICT[m.verdict].text}</strong>
-              <span class="muted small">Unusual = a daily move beyond ${set.threshold}σ</span></div>
-          </div>
-          <p>Historically, <b>${m.leaf.followed_by_shock} of ${m.leaf.days}</b> days with conditions like today (${pct(m.leaf.rate)}) were followed by an unusual move within ${set.horizon} days, vs. <b>${pct(mt.base_rate)}</b> on an average day${lift != null ? ` (<b>${lift.toFixed(2)}×</b>)` : ""}.</p>
-          <p class="small muted">Score from the ${modelName}. Its track record on unseen data is <b>${reliability}</b> (AUC ${mt.auc ?? "–"}). See Model performance below.</p>
-        </div>
+      <div class="glance">
         <div class="card">
           <h2>Today at a glance</h2>
           <p class="sub">Anomaly detection on the latest session</p>
@@ -327,7 +317,39 @@
         <div id="price-chart" class="chart" style="height:420px"></div>
       </div>
 
-      <div class="card" style="margin-top:16px">
+      <div class="card anom-log">
+        <div class="card-head">
+          <div><h2>Anomaly log</h2><p class="sub">Click a row to zoom the chart to that date</p></div>
+          <div class="seg" id="table-filter">${[["all", "All"], ["price", "Price"], ["volume", "Volume"], ["outlier", "Outlier"]].map(([k, l]) => `<button data-f="${k}" class="${k === state.tableFilter ? "active" : ""}">${l}</button>`).join("")}</div>
+        </div>
+        <div class="table-wrap" id="anom-table"></div>
+      </div>
+
+      <details class="hero-more baseline" id="baseline-more" ${state.baselineOpen ? "open" : ""}>
+        <summary><span class="when-closed">Baseline: the classic model we started with</span><span class="when-open">Hide the classic model</span></summary>
+        <p class="baseline-note">Our first model: a ${modelName} that predicts a move beyond ${set.threshold}σ within ${set.horizon} days from price and volume indicators. On days it never saw, its track record for ${esc(s.symbol)} is <b>${reliability}</b> (AUC ${mt.auc ?? "–"}; 0.5 is a coin flip). The regime model above replaced it as the main forecast; it's kept here for comparison.</p>
+      <div class="grid top">
+        <div class="card verdict">
+          <h2>Classic model verdict</h2>
+          <div class="score-row">
+            ${gauge(m.risk_score, m.verdict)}
+            <div class="big">Next ${set.horizon} day${set.horizon > 1 ? "s" : ""}<strong>${VERDICT[m.verdict].text}</strong>
+              <span class="muted small">Unusual = a daily move beyond ${set.threshold}σ</span></div>
+          </div>
+          <p>Historically, <b>${m.leaf.followed_by_shock} of ${m.leaf.days}</b> days with conditions like today (${pct(m.leaf.rate)}) were followed by an unusual move within ${set.horizon} days, vs. <b>${pct(mt.base_rate)}</b> on an average day${lift != null ? ` (<b>${lift.toFixed(2)}×</b>)` : ""}.</p>
+        </div>
+        <div class="card">
+          <h2>Model performance</h2>
+          <p class="sub">Trained on the first ${mt.train_days} days, tested on the most recent ${mt.test_days} days it never saw</p>
+          <div class="metrics">
+            <div class="metric"><div class="v">${mt.auc ?? "–"}</div><div class="l">AUC (0.5 = coin flip, 1 = perfect)</div></div>
+            <div class="metric"><div class="v">${pct(mt.precision, 0)}</div><div class="l">Precision: alerts that came true (test base rate ${pct(mt.test_base_rate, 0)})</div></div>
+            <div class="metric"><div class="v">${pct(mt.recall, 0)}</div><div class="l">Recall: unusual moves that were flagged in advance</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Model risk score over time</h2>
         <p class="sub">Out-of-sample predictions since ${esc(mt.test_start)} (the model never saw these days during training). Red ticks mark days with an actual unusual move. A useful model rises <i>before</i> clusters of ticks.</p>
         <div id="risk-chart" class="chart" style="height:240px"></div>
@@ -347,35 +369,26 @@
         </div>
       </div>
 
-      <div class="grid two tree-log">
-        <div class="card">
-          <div class="card-head"><div><h2>Decision tree</h2><p class="sub">Each node: share of days followed by an unusual move. Today's path is highlighted. Click a node to collapse it.</p></div></div>
-          <div class="tree" id="tree"></div>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <div><h2>Anomaly log</h2><p class="sub">Click a row to zoom the chart to that date</p></div>
-            <div class="seg" id="table-filter">${[["all", "All"], ["price", "Price"], ["volume", "Volume"], ["outlier", "Outlier"]].map(([k, l]) => `<button data-f="${k}" class="${k === state.tableFilter ? "active" : ""}">${l}</button>`).join("")}</div>
-          </div>
-          <div class="table-wrap" id="anom-table"></div>
-        </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-head"><div><h2>Decision tree</h2><p class="sub">Each node: share of days followed by an unusual move. Today's path is highlighted. Click a node to collapse it.</p></div></div>
+        <div class="tree" id="tree"></div>
       </div>
 
-      <div class="card" style="margin-top:16px">
-        <h2>Model performance</h2>
-        <p class="sub">Trained on the first ${mt.train_days} days, tested on the most recent ${mt.test_days} days it never saw</p>
-        <div class="metrics">
-          <div class="metric"><div class="v">${mt.auc ?? "–"}</div><div class="l">AUC (0.5 = coin flip, 1 = perfect)</div></div>
-          <div class="metric"><div class="v">${pct(mt.precision, 0)}</div><div class="l">Precision: alerts that came true (test base rate ${pct(mt.test_base_rate, 0)})</div></div>
-          <div class="metric"><div class="v">${pct(mt.recall, 0)}</div><div class="l">Recall: unusual moves that were flagged in advance</div></div>
-        </div>
+      <div class="card" style="margin:16px 0 14px">
+        <h2>How the classic model works</h2>
         <p class="explain"><b>How it works.</b> Each day is described by ${Object.keys(m.current_features).length} indicators that use only past data: return and volume z-scores, volatility regime, gaps, momentum, RSI, Bollinger %B and recent shock counts. The target is whether a move larger than ${set.threshold}σ happens within the next ${set.horizon} days. A ${modelName} learns which combinations of indicators came before such moves; the score is its probability, balanced so that 50 means "as likely as average".</p>
         <p class="explain"><b>Read with care.</b> Markets are noisy, so even good scores are probabilities, not certainties. Volatility tends to cluster, which is mostly what the model picks up. Compare precision with the base rate: precision above the base rate means the alerts add information.</p>
-      </div>`;
+      </div>
+      </details>`;
 
     drawPrice(d);
-    drawRisk(d);
-    drawImportance(d);
+    // Classic-model charts are drawn when the baseline section is open (Plotly can't size a hidden chart).
+    const drawBaseline = () => { drawRisk(d); drawImportance(d); };
+    if (state.baselineOpen) drawBaseline();
+    $("#baseline-more").addEventListener("toggle", (e) => {
+      state.baselineOpen = e.target.open;
+      if (e.target.open) drawBaseline();
+    });
     renderTree(m.tree);
     renderTable();
     bindDetailEvents();
