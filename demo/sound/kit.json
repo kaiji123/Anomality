@@ -1,0 +1,136 @@
+{
+ "kit": 1,
+ "name": "anomality-demo",
+ "sr": 48000,
+ "note": "anomality app demo: a subtle bed (kalimba roots, a marimba note per beat, no drums) under real UI sounds: a click on every recorded click, a key per letter typed, a barely-there glide on each camera move, a light tap as each caption lands, one bell on the end mark.",
+ "roles": {
+  "click": {
+   "sound": "fit/click/floss_lid",
+   "takes": 2,
+   "align": "onset",
+   "bed_db": 6.5,
+   "offset_ms": -11,
+   "min_gap_ms": 85,
+   "level_db": 0.0,
+   "note": "a small plastic click, a CC0 recording fitted as code: clicks lead the cut by ~11 ms"
+  },
+  "key": {
+   "sound": "typing_key/clicky",
+   "takes": 12,
+   "align": "onset",
+   "bed_db": 6.5,
+   "offset_ms": 8,
+   "min_gap_ms": 87,
+   "level_db": -1.0,
+   "note": "realistic mid keys (1.3-4.4 kHz), a new take per keystroke, ~87 ms apart in a run"
+  },
+  "key.return": {
+   "sound": "typing_key/clicky",
+   "takes": 2,
+   "seed": 4100,
+   "align": "onset",
+   "bed_db": 7.0,
+   "offset_ms": 8,
+   "level_db": -0.5,
+   "note": "the run's own switch on its own seeds, a little louder"
+  },
+  "land.light": {
+   "sound": "tap/finger",
+   "takes": 3,
+   "align": "onset",
+   "bed_db": 3.0,
+   "offset_ms": -60,
+   "min_gap_ms": 115,
+   "level_db": -10.0,
+   "note": "a light finger tap (150-260 Hz and a faint click), low under the bed: taps lead the cut by ~60 ms"
+  },
+  "pop": {
+   "sound": "ui_pop/soft",
+   "takes": 4,
+   "align": "onset",
+   "bed_db": 8.5,
+   "offset_ms": 4,
+   "min_gap_ms": 114,
+   "level_db": -8.0,
+   "note": "the soft rounded mid pop (0.14 s, 550 Hz, 22 ms onset, t20 75 ms): the most used effect, in runs ~114 ms apart"
+  },
+  "whoosh.long": {
+   "sound": "whoosh_big/thump",
+   "takes": 2,
+   "align": "peak",
+   "bed_db": 8.5,
+   "offset_ms": 3,
+   "level_db": -6.5,
+   "note": "a big low whoosh that lands with a thump ~80 ms in and rings ~0.35 s"
+  },
+  "bell": {
+   "sound": "mallet/glock",
+   "pitches": [
+    "G4",
+    "A4",
+    "C5",
+    "D5",
+    "E5",
+    "G5",
+    "A5",
+    "C6",
+    "D6",
+    "E6"
+   ],
+   "takes": 1,
+   "align": "onset",
+   "bed_db": 7.5,
+   "offset_ms": -20,
+   "min_gap_ms": 110,
+   "width": 0.6,
+   "level_db": -8.5,
+   "note": "a gated glockenspiel note doubled an octave under (0.35 s), C pentatonic G4-E6, set wide (L / R correlation 0.6): notes lead the cut by ~20 ms"
+  },
+  "move": {
+   "sound": "swipe/glide",
+   "takes": 4,
+   "edits": {
+    "dur": 0.8,
+    "apex": 0.4
+   },
+   "align": "peak",
+   "level_db": -17.0,
+   "width": 0.5
+  },
+  "m.arp": {
+   "sound": "mallet/marimba",
+   "pitches": [
+    "F4",
+    "G4",
+    "A4",
+    "B4",
+    "C5",
+    "D5",
+    "E5",
+    "F5",
+    "G5",
+    "A5",
+    "C6"
+   ],
+   "takes": 1,
+   "align": "onset",
+   "offset_ms": 0,
+   "level_db": -6.0,
+   "note": "music: one soft marimba note per beat"
+  },
+  "m.root": {
+   "sound": "pluck/kalimba_soft",
+   "pitches": [
+    "F4",
+    "G4",
+    "A4",
+    "C5"
+   ],
+   "takes": 1,
+   "align": "onset",
+   "offset_ms": 0,
+   "level_db": -4.0,
+   "note": "music: kalimba root on every bar line, ringing"
+  }
+ }
+}

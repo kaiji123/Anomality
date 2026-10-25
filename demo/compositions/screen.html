@@ -1,0 +1,84 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; overflow: hidden; background: #f9f9f7; font-family: "Inter", sans-serif; }
+    #scr-cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+    #scr-video { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; }
+    #scr-cursor { position: absolute; left: 0; top: 0; width: 34px; height: 46px; transform-origin: 3px 3px; }
+    .scr-cap { position: absolute; left: 72px; bottom: 64px; padding: 22px 34px 24px; border-radius: 18px; background: #0b0b0b;
+      color: #fcfcfb; font-size: 46px; font-weight: 800; letter-spacing: -0.015em; white-space: nowrap; opacity: 0;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18); }
+    .scr-cap span { color: #6fa8f0; }
+  </style>
+  <div id="root" data-composition-id="screen" data-width="1920" data-height="1080">
+    <div id="scr-cam">
+      <video id="scr-video" class="clip" src="assets/rec/session.mp4" muted playsinline data-start="0" data-duration="37.7" data-track-index="0"></video>
+      <svg id="scr-cursor" viewBox="0 0 17 23" aria-hidden="true"><path d="M1.5 1.5 L1.5 18.5 L5.6 14.6 L8.4 21.2 L11.4 19.9 L8.7 13.4 L14.4 13.4 Z" fill="#0b0b0b" stroke="#fcfcfb" stroke-width="1.6" stroke-linejoin="round" /></svg>
+    </div>
+    <div id="scr-c1" class="scr-cap">Every week: the market’s <span>mood</span></div>
+    <div id="scr-c2" class="scr-cap">Any stock or crypto</div>
+    <div id="scr-c3" class="scr-cap">Next week’s move, <span>in dollars</span></div>
+    <div id="scr-c4" class="scr-cap">Crash-tested against the <span>original model</span></div>
+    <div id="scr-c5" class="scr-cap">Try the rule: <span>half invested</span> when Stormy</div>
+    <div id="scr-c6" class="scr-cap">Backtested through the <span>COVID crash</span></div>
+  </div>
+  <script>
+    (function () {
+      const T = window.TRACK, K = 1920 / T.w;                 // recording px -> frame px
+      const moves = T.events.filter((e) => e.x !== undefined);
+      const clicks = T.events.filter((e) => e.click).map((e) => e.t);
+      const cursor = document.getElementById("scr-cursor");
+      const S = { t: 0 };
+      function render() {
+        const t = S.t;
+        if (!moves.length || t < moves[0].t) { cursor.style.opacity = 0; return; }
+        let i = 0;
+        while (i < moves.length - 1 && moves[i + 1].t <= t) i++;
+        const a = moves[i], b = moves[Math.min(i + 1, moves.length - 1)];
+        const u = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 0;
+        const x = (a.x + (b.x - a.x) * u) * K, y = (a.y + (b.y - a.y) * u) * K;
+        let press = 1;
+        for (const c of clicks) { const d = t - c; if (d >= 0 && d < 0.22) press = Math.min(press, 0.82 + 0.18 * Math.abs(d - 0.07) / 0.15); }
+        cursor.style.opacity = 1;
+        cursor.style.transform = `translate(${x - 3}px, ${y - 3}px) scale(${press})`;
+      }
+
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo(S, { t: 0 }, { t: 37.7, duration: 37.7, ease: "none", onUpdate: render }, 0);
+
+      // camera: focus point (recording px) and zoom; clamped so the frame never shows past the recording's edges
+      const cam = (fx, fy, s) => {
+        const x = Math.min(0, Math.max(1920 - 1920 * s, 960 - fx * K * s));
+        const y = Math.min(0, Math.max(1080 - 1080 * s, 540 - fy * K * s));
+        return { x, y, scale: s };
+      };
+      gsap.set("#scr-cam", cam(720, 405, 1));
+      const move = (at, dur, fx, fy, s, ease = "power2.inOut") => tl.to("#scr-cam", { ...cam(fx, fy, s), duration: dur, ease }, at);
+      move(1.9, 0.8, 300, 250, 1.55);       // the report's mood tile, cursor heading for "What do the levels mean?"
+      move(3.35, 0.55, 720, 330, 1.12);     // the levels pop-up
+      move(6.8, 0.6, 720, 405, 1);          // back out to close it
+      move(7.7, 0.6, 1060, 60, 1.9);        // the search box: N V D A
+      move(10.6, 0.5, 720, 405, 1);         // load + scroll to the asset card
+      move(12.6, 0.6, 470, 250, 1.6);       // ±4.9% · about ±$10.29
+      move(16.25, 0.6, 640, 430, 1.3);      // the chart: 2020 crash, compare with the original model
+      move(22.5, 0.5, 720, 405, 1);         // scroll to the decision layer
+      move(24.5, 0.6, 700, 330, 1.65);      // the try-it slider and today's call
+      move(30.8, 0.5, 720, 405, 1);         // scroll to the backtest
+      move(32.5, 0.6, 860, 330, 1.3);       // the backtest, cursor heading for "COVID crash"
+      move(35.0, 0.7, 1160, 215, 1.75);     // the table: -21.3% vs. -33.8%
+
+      // captions: whole line blurs in, holds still, blurs out
+      const cap = (sel, a, b) => {
+        tl.fromTo(sel, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power4.out" }, a);
+        tl.to(sel, { opacity: 0, filter: "blur(8px)", duration: 0.15, ease: "power3.in" }, b);
+      };
+      cap("#scr-c1", 0.3, 6.7);
+      cap("#scr-c2", 7.8, 12.3);
+      cap("#scr-c3", 12.9, 16.0);
+      cap("#scr-c4", 16.5, 22.3);
+      cap("#scr-c5", 24.7, 30.6);
+      cap("#scr-c6", 32.7, 37.5);
+      render();
+      window.__timelines["screen"] = tl;
+    })();
+  </script>
+</template>

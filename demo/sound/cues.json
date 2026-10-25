@@ -1,0 +1,130 @@
+{
+ "fps": 30,
+ "events": [
+  {
+   "f": 94,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 214,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 275,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 285,
+   "kind": "key",
+   "id": "key N"
+  },
+  {
+   "f": 290,
+   "kind": "key",
+   "id": "key V"
+  },
+  {
+   "f": 295,
+   "kind": "key",
+   "id": "key D"
+  },
+  {
+   "f": 299,
+   "kind": "key",
+   "id": "key A"
+  },
+  {
+   "f": 312,
+   "kind": "key.return",
+   "id": "Enter"
+  },
+  {
+   "f": 525,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 601,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 795,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1032,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 10,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 236,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 389,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 496,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 742,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 982,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 69,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 682,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 932,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 1060,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 1137,
+   "kind": "whoosh.long",
+   "id": "colour flood"
+  },
+  {
+   "f": 1207,
+   "kind": "pop",
+   "id": "the mark pops in"
+  },
+  {
+   "f": 1229,
+   "kind": "bell",
+   "id": "the pulse finishes drawing"
+  }
+ ]
+}

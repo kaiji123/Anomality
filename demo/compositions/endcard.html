@@ -1,0 +1,42 @@
+<template>
+  <style>
+    #root { position: absolute; inset: 0; font-family: "Inter", sans-serif; }
+    #ec-flood { position: absolute; inset: 0; background: #2a78d6; opacity: 0; }
+    #ec-claim { position: absolute; left: 96px; top: 400px; width: 1728px; font-size: 120px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; color: #fcfcfb; }
+    #ec-claim span { color: rgba(252, 252, 251, 0.35); }
+    #ec-lock { position: absolute; left: 0; top: 330px; width: 1920px; display: flex; justify-content: center; align-items: center; gap: 40px; }
+    #ec-mark { width: 168px; height: 168px; }
+    #ec-word { font-size: 168px; font-weight: 900; letter-spacing: -0.04em; color: #fcfcfb; clip-path: inset(0 100% 0 0); }
+    #ec-cta { position: absolute; left: 0; top: 610px; width: 1920px; text-align: center; font-size: 52px; font-weight: 700; color: #fcfcfb; opacity: 0; }
+    #ec-sub { position: absolute; left: 0; top: 690px; width: 1920px; text-align: center; font-size: 36px; font-weight: 500; color: rgba(252, 252, 251, 0.82); opacity: 0; }
+  </style>
+  <div id="root" data-composition-id="endcard" data-width="1920" data-height="1080">
+    <div id="ec-flood"></div>
+    <h1 id="ec-claim"><span id="ec-w1">Next</span> <span id="ec-w2">week’s</span> <span id="ec-w3">risk,</span><br /><span id="ec-w4">in</span> <span id="ec-w5">plain</span> <span id="ec-w6">words</span></h1>
+    <div id="ec-lock">
+      <svg id="ec-mark" viewBox="0 0 32 32" aria-hidden="true"><rect id="ec-tile" width="32" height="32" rx="8" fill="#fcfcfb" /><path id="ec-pulse" d="M5 20 L11 20 L14 8 L18 25 L21 15 L27 15" stroke="#2a78d6" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" /></svg>
+      <div id="ec-word">anomality</div>
+    </div>
+    <div id="ec-cta">github.com/kaiji123/Anomality</div>
+    <div id="ec-sub">Crash-tested risk forecasts · 56 stocks, ETFs and crypto</div>
+  </div>
+  <script>
+    (function () {
+      const F = (f) => f / 30;
+      const tl = gsap.timeline({ paused: true });
+      // colour flood: the ground turns to the accent
+      tl.fromTo("#ec-flood", { opacity: 0 }, { opacity: 1, duration: F(12), ease: "power2.inOut" }, 0);
+      // claim: word by word from faint to full
+      ["#ec-w1", "#ec-w2", "#ec-w3", "#ec-w4", "#ec-w5", "#ec-w6"].forEach((w, i) =>
+        tl.fromTo(w, { color: "rgba(252,252,251,0.35)" }, { color: "rgba(252,252,251,1)", duration: F(4), ease: "none" }, F(10 + 3 * i)));
+      tl.to("#ec-claim", { opacity: 0, filter: "blur(10px)", duration: F(5), ease: "power3.in" }, F(66));
+      // end card: the tile pops in, the pulse draws, the wordmark wipes in
+      tl.fromTo("#ec-mark", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: F(10), ease: "back.out(1.6)" }, F(74));
+      tl.fromTo("#ec-pulse", { attr: { "stroke-dashoffset": 1 } }, { attr: { "stroke-dashoffset": 0 }, duration: F(18), ease: "power2.inOut" }, F(80));
+      tl.fromTo("#ec-word", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: F(16), ease: "power3.out" }, F(92));
+      tl.fromTo("#ec-cta", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: F(6), ease: "power4.out" }, F(114));
+      tl.fromTo("#ec-sub", { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: F(6), ease: "power4.out" }, F(122));
+      window.__timelines["endcard"] = tl;
+    })();
+  </script>
+</template>
