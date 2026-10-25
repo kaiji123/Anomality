@@ -58,6 +58,54 @@ async function page(browser, opts) {
   await p.waitForFunction(() => /QLIKE/.test(document.querySelector("#dec-robust-body")?.textContent || ""), null, T);
   const robustText = await p.textContent("#dec-robust-body");
   check("Robustness section shows costs, conventions and forecast quality", /0\.20%/.test(robustText) && /true buy-and-hold basket/.test(robustText) && /QLIKE/.test(robustText));
+  // Historical Time Machine: known-at-t and what-happened-next stay in separate panels
+  await p.waitForSelector("#tm-chart .main-svg", T);
+  check("Time Machine shows what was known and, apart, what happened next", (await p.$(".tm-known")) && /not known on/.test(await p.textContent(".tm-after")));
+  await p.click('#tm-presets button[data-date="2020-02-19"]');
+  await p.waitForFunction(() => /Feb 19, 2020/.test(document.querySelector(".tm-known")?.textContent || ""), null, T);
+  check("Time Machine preset jumps to the COVID crash with a reconstructed decision", /Reconstructed/.test(await p.textContent(".tm-known")));
+  await p.fill("#tm-date", "2020-03-14");
+  await p.click('#tm-form button[type="submit"]');
+  await p.waitForFunction(() => /not a trading day/.test(document.querySelector("#tm-body")?.textContent || ""), null, T);
+  check("Time Machine explains a weekend date uses the previous close", /Mar 13, 2020/.test(await p.textContent(".tm-known")));
+  // Intelligent alerts: monitors from the backend, filters, evaluation on a past day
+  await p.waitForSelector("#al-date", T);
+  check("Alerts section lists every monitor with its status", (await p.$$(".al-checks tbody tr")).length >= 8);
+  await p.click("#al-tm");
+  await p.waitForFunction(() => document.querySelector("#al-date")?.value === "2020-03-13", null, T);
+  check("Alerts on the Time Machine day show the COVID market stress", /Market stress: Stormy mood/.test(await p.textContent(".al-list")));
+  await p.selectOption("#al-type", "data_quality");
+  check("Alert filters narrow the list", !/Market stress: Stormy mood/.test(await p.textContent("#al-body")));
+  await p.selectOption("#al-type", "all");
+  // AI analyst: nothing is requested until a click; without a key it shows the backend's facts
+  check("AI analyst waits for a click", /Pick a question/.test(await p.textContent("#analyst")));
+  await p.click('#analyst [data-kind="alert"]');
+  await p.waitForFunction(() => /Measured facts/.test(document.querySelector("#an-out")?.textContent || ""), null, T);
+  const an = await p.textContent("#an-out");
+  check("AI analyst explains the chosen alert from cited backend facts", /Market stress: Stormy mood/.test(an) && /F\d+/.test(an) && /(Gemini|Deterministic)/.test(an));
+  const voiceStatus = await (await p.request.get(`${URL}/api/voice/status`)).json();
+  check("Listen button is off (with a reason) when voice isn't configured, on when it is",
+    (await p.$eval("#an-listen", (b) => b.disabled)) === !voiceStatus.configured);
+
+  // Voice playback and its error path, with the voice API faked in the browser (no ElevenLabs call)
+  const v = await page(browser, { viewport: { width: 1280, height: 900 } });
+  await v.route("**/api/voice/status", (r) => r.fulfill({ json: { configured: true, model: "test", max_chars: 4000 } }));
+  let voiceMode = "ok";
+  await v.route("**/api/voice", (r) => voiceMode === "ok"
+    ? r.fulfill({ status: 200, contentType: "audio/mpeg", body: Buffer.from("ID3" + "\0".repeat(500)) })
+    : r.fulfill({ status: 502, json: { detail: { status: "provider_error", message: "ElevenLabs returned HTTP 500." } } }));
+  await v.reload(); // page() already loaded the app; reload so it reads the faked voice status
+  await v.waitForSelector('#analyst [data-kind="summary"]', T);
+  await v.click('#analyst [data-kind="summary"]');
+  await v.waitForSelector("#an-listen:not([disabled])", T);
+  await v.click("#an-listen");
+  await v.waitForFunction(() => !document.querySelector("#an-audio").hidden, null, T);
+  check("Listen to report loads the audio of the displayed report", /report shown above|press play/.test(await v.textContent("#an-voice-msg")));
+  voiceMode = "fail";
+  await v.click("#an-listen");
+  await v.waitForFunction(() => /Voice unavailable/.test(document.querySelector("#an-voice-msg").textContent), null, T);
+  check("A voice failure keeps the written report and says so", /written report above is complete/.test(await v.textContent("#an-voice-msg")) && /Measured facts/.test(await v.textContent("#an-out")));
+  await v.close();
   await p.click("#dec-prev");
   check("Previous rule can be added for comparison", (await p.$$("#dec-table tbody tr")).length === 3);
   await p.waitForSelector("#decision-card .pos.lg", T);

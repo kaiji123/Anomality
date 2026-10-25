@@ -6,16 +6,18 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import Path as PathParam
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from .analysis import FEATURES, DecisionModel, Settings, detect, features
 from .data import DataError, load_prices
 from .data import status as data_status
-from . import decision_service, robustness, significance
+from . import alerts, analyst, decision_service, robustness, significance, time_machine, voice
 from .regime_service import RegimeUnavailable, plain_asset, plain_market
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -216,6 +218,96 @@ def api_decision(symbol: str):
         return _clean(decision_service.plain_asset(symbol))
     except decision_service.DecisionUnavailable as e:
         raise HTTPException(404, str(e))
+
+
+@app.get("/api/timemachine")
+def api_time_machine_meta():
+    """Assets and date range the Historical Time Machine covers."""
+    try:
+        return _clean(time_machine.meta(time_machine.load()))
+    except (time_machine.TimeMachineError, decision_service.DecisionUnavailable) as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/timemachine/{symbol}")
+def api_time_machine(symbol: str, date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """What the system knew at the close of `date` (forecast, inputs, reconstructed decision), and,
+    kept separate, what happened over the forecast horizon after it. Missing data -> 200 with a status."""
+    try:
+        return _clean(time_machine.cached_view(symbol, date))
+    except decision_service.DecisionUnavailable as e:
+        raise HTTPException(503, str(e))
+    except time_machine.UnknownAsset as e:
+        raise HTTPException(404, str(e))
+    except time_machine.BadDate as e:
+        raise HTTPException(422, str(e))
+    except time_machine.TimeMachineError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/alerts")
+def api_alerts(date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """Alerts and every monitor's status on the newest forecast day, or on a past `date` (using only
+    data available that day). Deterministic; thresholds in the response's `config`."""
+    try:
+        return _clean(alerts.latest(date))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except (time_machine.TimeMachineError, decision_service.DecisionUnavailable) as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/api/alerts/{alert_id}/ack")
+def api_alert_ack(alert_id: str = PathParam(..., pattern=r"^[a-z_]+:[A-Za-z0-9_.\-]+:\d{4}-\d{2}-\d{2}$")):
+    """Mark an alert as seen (kept in memory until the server restarts)."""
+    return alerts.acknowledge(alert_id)
+
+
+class AnalystRequest(BaseModel):
+    kind: str = Field("summary", pattern="^(summary|alert|risks|limits)$")
+    alerts_date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    alert_id: Optional[str] = Field(None, max_length=120, pattern=r"^[a-z_]+:[A-Za-z0-9_.\-]+:\d{4}-\d{2}-\d{2}$")
+
+
+@app.get("/api/analyst/status")
+def api_analyst_status():
+    """Whether Gemini is configured (never returns the key)."""
+    return analyst.configured()
+
+
+@app.post("/api/analyst")
+def api_analyst(req: AnalystRequest):
+    """Gemini explains facts the backend computed; falls back to those facts if it can't."""
+    if req.kind == "alert" and not req.alert_id:
+        raise HTTPException(422, "Choose an alert to explain.")
+    try:
+        return _clean(analyst.explain(req.kind, req.alert_id, alerts_date=req.alerts_date))
+    except analyst.UnknownAlert as e:
+        raise HTTPException(404, str(e))
+    except analyst.RateLimited as e:
+        raise HTTPException(429, {"status": "rate_limited", "message": str(e)},
+                            headers={"Retry-After": str(int(e.retry_after) + 1)})
+
+
+class VoiceRequest(BaseModel):
+    report_id: str = Field(..., pattern="^[0-9a-f]{16}$")
+
+
+@app.get("/api/voice/status")
+def api_voice_status():
+    """Whether voice reports are configured (never returns the key)."""
+    return voice.configured()
+
+
+@app.post("/api/voice")
+def api_voice(req: VoiceRequest):
+    """Read aloud a report the analyst already returned (by id, never free text). audio/mpeg."""
+    try:
+        audio = voice.for_report(req.report_id)
+    except voice.VoiceError as e:
+        headers = {"Retry-After": str(int(e.retry_after) + 1)} if e.retry_after is not None else None
+        raise HTTPException(e.http, {"status": e.status, "message": str(e)}, headers=headers)
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

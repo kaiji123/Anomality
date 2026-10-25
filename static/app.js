@@ -32,6 +32,9 @@
     decPeriod: "all",
     decPrev: false,
     decSig: undefined,   // /api/decision/significance (bootstrap check of the rule vs. buy and hold)
+    tm: { meta: null, symbol: null, date: null, view: null, token: 0 },  // Historical Time Machine
+    al: { data: null, date: null, type: "all", severity: "all", status: "open", token: 0 },  // alerts and drift
+    an: { status: null, result: null, busy: false, token: 0, voice: null, audio: null },  // AI analyst + voice (explicit clicks only)
     decRobust: null,     // /api/decision/robustness, fetched when the section is first opened
     ruleTry: null,       // slider value; starts at today's storminess
   };
@@ -1342,6 +1345,352 @@
       <p class="small muted" style="margin:6px 0 0">Reward / risk is the Sharpe ratio: return per unit of volatility. Bold = best in each column.${state.decPrev ? " The previous rule cut back after unexpectedly big swings, which usually came just before rebounds." : ""}</p>`;
   }
 
+  // ---------- Historical Time Machine (backend/time_machine.py) ----------
+  // Two strictly separate panels: what was known at the close of the chosen day, and what
+  // happened over the forecast horizon after it. The backend builds the first from data up to
+  // that day only; this code never mixes the two.
+  async function loadTimeMachine() {
+    const el = $("#time-machine");
+    el.hidden = false;
+    el.innerHTML = tmHead(`<span class="muted">Loading the history…</span>`);
+    try {
+      state.tm.meta = await api("/api/timemachine");
+    } catch (e) {
+      el.innerHTML = tmHead(`<span class="muted">Unavailable: ${esc(e.message)}</span>`);
+      return;
+    }
+    const m = state.tm.meta, syms = m.assets.map((a) => a.symbol);
+    state.tm.symbol = syms.includes(state.selected) ? state.selected : syms.includes("NVDA") ? "NVDA" : syms[0];
+    state.tm.date = m.last;
+    renderTimeMachineShell();
+    loadTimeMachineView();
+  }
+
+  function tmHead(extra = "") {
+    return `<div class="hero-head"><span class="core-badge tm">⟲ Time Machine</span><h2>Historical Time Machine</h2>
+      <span class="muted">Go back to any day: see only what the system knew at that day's close, then, kept apart, what happened next.</span>${extra}</div>`;
+  }
+
+  function renderTimeMachineShell() {
+    const m = state.tm.meta, el = $("#time-machine");
+    const group = (crypto) => m.assets.filter((a) => a.crypto === crypto).map((a) =>
+      `<option value="${esc(a.symbol)}" ${a.symbol === state.tm.symbol ? "selected" : ""}>${esc(a.symbol)}</option>`).join("");
+    el.innerHTML = `${tmHead()}
+      <form class="tm-controls" id="tm-form" autocomplete="off">
+        <label>Asset <select id="tm-symbol"><optgroup label="Stocks and ETFs">${group(false)}</optgroup><optgroup label="Crypto">${group(true)}</optgroup></select></label>
+        <label>Day <input type="date" id="tm-date" min="${m.first}" max="${m.last}" value="${state.tm.date}" required></label>
+        <button type="submit">Go back</button>
+        <div class="seg" id="tm-presets" aria-label="Market phases">${m.presets.map((p) => `<button type="button" data-date="${esc(p.date)}">${esc(p.label)}</button>`).join("")}<button type="button" data-date="${m.last}">Latest</button></div>
+      </form>
+      <p class="small muted tm-range">Forecasts exist from ${esc(fmtDate(m.first))} to ${esc(fmtDate(m.last))} (out-of-sample only); prices run to ${esc(fmtDate(m.prices_through))}. Each forecast covers the next ${m.horizon_days} trading days.</p>
+      <div id="tm-body"></div>`;
+    $("#tm-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const d = $("#tm-date").value;
+      if (!d || d < m.first || d > m.last) { $("#tm-body").innerHTML = `<p class="unavailable">Pick a day between ${esc(m.first)} and ${esc(m.last)}.</p>`; return; }
+      state.tm.symbol = $("#tm-symbol").value; state.tm.date = d;
+      loadTimeMachineView();
+    });
+    $("#tm-presets").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-date]"); if (!b) return;
+      $("#tm-date").value = b.dataset.date;
+      $("#tm-form").requestSubmit();
+    });
+  }
+
+  async function loadTimeMachineView() {
+    const { symbol, date } = state.tm, token = ++state.tm.token;
+    const body = $("#tm-body");
+    body.style.opacity = state.tm.view ? 0.55 : 1;
+    if (!state.tm.view) body.innerHTML = `<p class="unavailable">Rebuilding what was known at the close of ${esc(date)}…</p>`;
+    let v;
+    try {
+      v = await api(`/api/timemachine/${encodeURIComponent(symbol)}?date=${encodeURIComponent(date)}`);
+    } catch (e) {
+      v = { error: e.message };
+    }
+    if (token !== state.tm.token) return;
+    body.style.opacity = 1;
+    state.tm.view = v.error ? null : v;
+    body.innerHTML = v.error ? `<p class="error">${esc(v.error)}</p>` : renderTimeMachineView(v);
+    if (v.series) drawTimeMachine(v);
+    syncAlertsTmButton();
+  }
+
+  function renderTimeMachineView(v) {
+    if (v.status !== "ok") return `<p class="unavailable">${esc(v.note)}</p>`;
+    const k = v.known, o = v.outcome, d = k.decision, mr = d.mood_rule, pr = d.previous_rule, t = v.timing;
+    const pv = (x, dd = 1) => (x == null ? "–" : `${(x * 100).toFixed(dd)}%`);
+    const outcome = o.status === "complete" ? `
+        <div class="kv">
+          <span class="k">Realized volatility, ${esc(o.start)} → ${esc(o.end)}</span><span class="v">${pv(o.realized_vol)}</span>
+          <span class="k">Forecast for the same days</span><span class="v">${pv(o.forecast_vol)}</span>
+          <span class="k">Realized ÷ forecast</span><span class="v">${o.ratio == null ? "–" : `${o.ratio.toFixed(2)}×`}</span>
+          <span class="k">Price move over those ${o.horizon_days} days</span><span class="v">${o.move_pct == null ? "–" : `${o.move_pct > 0 ? "+" : ""}${o.move_pct.toFixed(1)}%`}</span>
+          <span class="k">Expected move (1 standard deviation)</span><span class="v">${pm(o.expected_move_pct)}</span>
+        </div>
+        <p class="tm-verdict">${o.surprise ? `<b>⚠ A surprise:</b> it moved ${o.ratio.toFixed(1)}× more than forecast.` : o.ratio < 1 ? "<b>Calmer than forecast.</b>" : "<b>Close to or above the forecast</b>, but under the 2× surprise mark."}
+          ${o.inside_expected_move == null ? "" : o.inside_expected_move ? " The price stayed inside the expected move." : " The price moved outside the expected move."}</p>`
+      : `<p class="unavailable">${esc(o.text)}</p>`;
+    return `
+      ${v.note ? `<p class="tm-note">ⓘ ${esc(v.note)}</p>` : ""}
+      <div class="tm-grid">
+        <div class="tm-known">
+          <div class="label-sm">Known at the close of ${esc(fmtDate(k.date))}</div>
+          <div class="tm-big">${pm(k.forecast.weekly_move_pct)} <span class="muted">expected move over the next ${k.forecast.horizon_days} days</span></div>
+          <div class="kv">
+            <span class="k">Forecast volatility (RG-ResMoE, out-of-sample)</span><span class="v">${pv(k.forecast.vol)}</span>
+            <span class="k">Realized, last 20 days (rv20)</span><span class="v">${pv(k.rv20)}</span>
+            <span class="k" title="rv20 ÷ forecast: above 1 means the last 20 days were wilder than the model now expects">Last 20 days ÷ forecast</span><span class="v">${k.surprise_ratio == null ? "–" : `${k.surprise_ratio.toFixed(2)}×`}</span>
+            <span class="k">Market mood (vs. earlier days only)</span><span class="v">${mr.market_mood ? `${esc(mr.market_mood)} · ${Math.round(mr.storminess * 100)}%` : "warming up"}</span>
+            <span class="k">${esc(v.symbol)}'s forecast vs. its own past</span><span class="v">${k.asset_percentile == null ? "–" : `busier than ${Math.round(k.asset_percentile * 100)}%`}</span>
+          </div>
+          <div class="tm-decision">
+            <div><span class="label-sm">Mood rule (the app's rule)</span><div>${posChip(mr.level, true)} <span class="small">${esc(mr.reason)}</span></div></div>
+            <div><span class="label-sm">Previous rule (surprise)</span><div>${pr ? `${posChip(pr.level)} <span class="small">${esc(pr.reason)}</span>` : `<span class="small muted">cannot be rebuilt (missing inputs)</span>`}</div></div>
+          </div>
+          <p class="small muted tm-prov">${esc(d.provenance)} ${mr.matches_backtest ? "✓ Same position as the backtest on that day." : mr.matches_backtest === false ? "⚠ Differs from the backtest on that day." : ""}
+            Decided ${esc(t.forecast_and_decision)}, traded ${esc(t.traded ?? "–")}, first return ${esc(t.first_return ?? "–")}.</p>
+          ${k.flags.length ? `<ul class="tm-flags">${k.flags.map((f) => `<li>⚠ ${esc(f)}</li>`).join("")}</ul>` : ""}
+        </div>
+        <div class="tm-after">
+          <div class="label-sm">What happened next <span class="tm-tag">not known on ${esc(k.date)}</span></div>
+          ${outcome}
+        </div>
+      </div>
+      <div class="feature-legend" style="margin-top:10px">
+        <span><i style="background:var(--accent)"></i>Forecast (known each day)</span>
+        <span><i style="background:var(--ink-2)"></i>Realized, last 20 days (known each day)</span>
+        <span><i class="tm-dash"></i>Realized after ${esc(k.date)} (not known then)</span>
+        <span><i style="background:var(--other)"></i>Realized over the forecast's ${o.horizon_days} days</span>
+      </div>
+      <div id="tm-chart" style="height:260px"></div>`;
+  }
+
+  function drawTimeMachine(v) {
+    if (!$("#tm-chart") || v.status !== "ok") return;
+    const s = v.series, k = v.known, o = v.outcome, pct = (a) => a.map((x) => (x == null ? null : x * 100));
+    const traces = [
+      { type: "scatter", mode: "lines", x: s.known.date, y: pct(s.known.rv20), line: { color: css("--ink-2"), width: 1.4 }, hovertemplate: "Last 20 days: %{y:.0f}%<extra></extra>" },
+      { type: "scatter", mode: "lines", x: s.known.date, y: pct(s.known.forecast), line: { color: css("--accent"), width: 2.2 }, hovertemplate: "Forecast: %{y:.0f}%<extra></extra>" },
+    ];
+    if (s.after.date.length) traces.push({ type: "scatter", mode: "lines", x: s.after.date, y: pct(s.after.rv20), line: { color: css("--muted"), width: 1.4, dash: "dash" }, hovertemplate: "After (not known then): %{y:.0f}%<extra></extra>" });
+    if (o.status === "complete") traces.push({ type: "scatter", mode: "lines+markers", x: [o.start, o.end], y: [o.realized_vol * 100, o.realized_vol * 100], line: { color: css("--other"), width: 3 }, marker: { size: 7 }, hovertemplate: `Realized ${o.start} → ${o.end}: %{y:.0f}%<extra></extra>` });
+    const end = s.after.date.length ? s.after.date[s.after.date.length - 1] : k.date;
+    Plotly.react("tm-chart", traces, {
+      ...plotBase(), margin: { l: 48, r: 12, t: 18, b: 28 },
+      xaxis: axis({ type: "date", range: [s.known.date[0], end] }), yaxis: axis({ ticksuffix: "%", title: { text: "Volatility, annualized", font: { size: 11 } }, rangemode: "tozero" }),
+      shapes: [
+        { type: "rect", xref: "x", yref: "paper", x0: k.date, x1: end, y0: 0, y1: 1, fillcolor: css("--surface-2"), opacity: 0.7, line: { width: 0 }, layer: "below" },
+        { type: "line", xref: "x", yref: "paper", x0: k.date, x1: k.date, y0: 0, y1: 1, line: { color: css("--accent"), width: 1.5, dash: "dot" } },
+      ],
+      annotations: [{ x: k.date, xref: "x", y: 1, yref: "paper", yanchor: "bottom", xanchor: ($("#tm-chart").clientWidth < 520 ? "right" : "left"),
+        text: $("#tm-chart").clientWidth < 520 ? "not known then → " : " after this day: not known then", showarrow: false, font: { size: 10.5, color: css("--muted") } }],
+    }, { ...plotCfg, displayModeBar: false });
+  }
+
+  // ---------- Intelligent alerts and drift detection (backend/alerts.py) ----------
+  // Every alert comes from the backend; this code only filters and displays them.
+  const AL_TYPES = { market_stress: "Market stress", regime_change: "Regime change", data_quality: "Data quality",
+    data_drift: "Input drift", prediction_drift: "Prediction drift", performance_drift: "Performance drift" };
+  const AL_SEV = { critical: { icon: "⛔", label: "Critical" }, warning: { icon: "▲", label: "Warning" }, info: { icon: "●", label: "Info" } };
+  const AL_STATUS = { active: "Active", acknowledged: "Seen", resolved: "Resolved" };
+
+  async function loadAlerts(date = null) {
+    const el = $("#alerts"), token = ++state.al.token;
+    el.hidden = false;
+    if (!state.al.data) el.innerHTML = alHead(`<span class="muted">Running the monitors…</span>`);
+    else $("#al-body").style.opacity = 0.55;
+    let r;
+    try {
+      r = await api(`/api/alerts${date ? `?date=${encodeURIComponent(date)}` : ""}`);
+    } catch (e) {
+      r = { error: e.message };
+    }
+    if (token !== state.al.token) return;
+    if (r.error) {
+      if (state.al.data) { $("#al-body").style.opacity = 1; $("#al-error").textContent = r.error; }
+      else el.innerHTML = alHead(`<span class="muted">Unavailable: ${esc(r.error)}</span>`);
+      return;
+    }
+    state.al.data = r; state.al.date = date;
+    renderAlerts();
+  }
+
+  // The Time Machine's day (its as-of trading day), read when needed so it never goes stale.
+  const alTmLabel = () => (state.tm.view?.known ? `Use the Time Machine day (${state.tm.view.known.date})` : "Use the Time Machine day");
+  function syncAlertsTmButton() {
+    const b = $("#al-tm");
+    if (b) { b.textContent = alTmLabel(); b.disabled = !state.tm.view?.known; }
+  }
+
+  function alHead(extra = "") {
+    return `<div class="hero-head"><span class="core-badge al">⚑ Alerts</span><h2>Intelligent Alerts &amp; Drift Detection</h2>
+      <span class="muted">Deterministic monitors on the forecasts, inputs and prices, each with its measurement, threshold and source.</span>${extra}</div>`;
+  }
+
+  function renderAlerts() {
+    const r = state.al.data, f = state.al, el = $("#alerts");
+    const open = (a) => a.status !== "resolved";
+    const list = r.alerts.filter((a) => (f.type === "all" || a.type === f.type) && (f.severity === "all" || a.severity === f.severity)
+      && (f.status === "all" || (f.status === "open" ? open(a) : a.status === "resolved")));
+    const nOpen = r.alerts.filter(open).length;
+    const sel = (id, cur, opts) => `<select id="${id}">${opts.map(([v, l]) => `<option value="${v}" ${v === cur ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+    const val = (v, unit) => (v == null ? "–" : `${Number.isInteger(v) ? v : v.toFixed(3)}${unit ? ` <span class="muted">${esc(unit)}</span>` : ""}`);
+    const card = (a) => `
+      <li class="al-item sev-${a.severity} st-${a.status}">
+        <div class="al-top">
+          <span class="al-sev">${AL_SEV[a.severity].icon} ${AL_SEV[a.severity].label}</span>
+          <b class="al-title">${esc(a.title)}</b>
+          <span class="al-type">${esc(AL_TYPES[a.type] || a.type)}</span>
+          <span class="al-status">${AL_STATUS[a.status]}${a.status === "resolved" ? ` on ${esc(a.resolved_on)}` : ""}</span>
+        </div>
+        <p class="al-desc">${esc(a.description)}</p>
+        <div class="al-meta">
+          <span>Measured: <b>${val(a.observed_value, a.unit)}</b></span>
+          ${a.threshold != null ? `<span>Threshold: <b>${val(a.threshold)}</b></span>` : ""}
+          <span>Scope: ${esc(a.scope)}</span>
+          <span>${a.first_seen === a.last_seen ? `On ${esc(a.first_seen)}` : `${esc(a.first_seen)} → ${esc(a.last_seen)}`}</span>
+          ${a.status === "active" ? `<button class="link-btn al-ack" data-id="${esc(a.id)}">Mark as seen</button>` : ""}
+          ${a.acknowledged_at ? `<span class="muted">seen ${esc(a.acknowledged_at.replace("T", " "))}</span>` : ""}
+        </div>
+        <details class="al-ev"><summary>Evidence and source</summary>
+          <p class="small muted">Source: ${esc(a.source)} · id <code>${esc(a.id)}</code></p>
+          <pre>${esc(JSON.stringify(a.evidence, null, 1))}</pre>
+        </details>
+      </li>`;
+    const statusIcon = { ok: "✓", alert: "⚑", insufficient_data: "…" };
+    el.innerHTML = `${alHead()}
+      <div class="al-bar">
+        <label>Evaluated on <input type="date" id="al-date" min="${esc(state.tm.meta?.first || "")}" max="${esc(state.tm.meta?.last || "")}" value="${esc(r.as_of)}"></label>
+        <button class="ghost" id="al-latest" type="button">Latest</button>
+        <button class="ghost" id="al-tm" type="button" ${state.tm.view?.known ? "" : "disabled"}>${alTmLabel()}</button>
+        <span class="al-sep"></span>
+        <label>Type ${sel("al-type", f.type, [["all", "All types"], ...Object.entries(AL_TYPES)])}</label>
+        <label>Severity ${sel("al-sev", f.severity, [["all", "All"], ["critical", "Critical"], ["warning", "Warning"], ["info", "Info"]])}</label>
+        <label>Status ${sel("al-status", f.status, [["open", "Open"], ["resolved", `Resolved (last ${r.config.lookback_days} days)`], ["all", "All"]])}</label>
+      </div>
+      <p class="small muted" style="margin:8px 0 10px">${esc(r.note)} Evaluated with data available on ${esc(r.as_of)} only. <span id="al-error" class="down"></span></p>
+      <div id="al-body">
+        ${list.length ? `<ul class="al-list">${list.map(card).join("")}</ul>`
+          : `<p class="al-empty">${nOpen === 0 && f.status === "open" ? `✓ No open alerts on ${esc(r.as_of)}: all ${r.checks.length} monitors were checked.` : "No alerts match these filters."}</p>`}
+        <details class="hero-more al-checks">
+          <summary><span class="when-closed">All ${r.checks.length} monitors on ${esc(r.as_of)}, including those with too little data</span><span class="when-open">Hide the monitors</span></summary>
+          <div class="table-scroll"><table class="compare plain dec-tbl">
+            <thead><tr><th>Monitor</th><th>Type</th><th>Status</th><th class="num">Measured</th><th class="num">Threshold</th><th>What it found</th></tr></thead>
+            <tbody>${r.checks.map((c) => `<tr class="ck-${c.status}"><td>${esc(c.monitor.replace(/_/g, " "))}</td><td>${esc(AL_TYPES[c.type] || c.type)}</td>
+              <td>${statusIcon[c.status]} ${esc(c.status.replace("_", " "))}</td><td class="num">${val(c.value)}</td><td class="num">${val(c.threshold)}</td>
+              <td class="small">${esc(c.text)}</td></tr>`).join("")}</tbody>
+          </table></div>
+          <p class="small muted">Thresholds: Stormy from ${Math.round(r.config.stormy_pct * 100)}% (the app's band), surprise from ${r.config.surprise_ratio}× (the anomaly report's mark), a mood change must hold ${r.config.regime_persist_days} days,
+            drift compares the last ${r.config.recent_days} days with the ${r.config.reference_days} before (PSI ≥ ${r.config.psi_major} = major shift, a rule of thumb, not a significance test),
+            performance compares the model's QLIKE with the simple estimate's on forecasts whose ${r.config.forecast_horizon_days}-day result is already known. <a class="hero-link" href="https://github.com/kaiji123/Anomality/blob/master/docs/ALERTS.md" target="_blank" rel="noopener">How the alerts work ↗</a></p>
+        </details>
+      </div>`;
+    const reload = () => loadAlerts($("#al-date").value || null);
+    $("#al-date").addEventListener("change", reload);
+    $("#al-latest").addEventListener("click", () => loadAlerts(null));
+    $("#al-tm").addEventListener("click", () => { if (state.tm.view?.known) loadAlerts(state.tm.view.known.date); });
+    if (!state.an.busy && $("#analyst") && !$("#analyst").hidden) renderAnalyst();  // keep its alert list current
+    [["al-type", "type"], ["al-sev", "severity"], ["al-status", "status"]].forEach(([id, k]) =>
+      $(`#${id}`).addEventListener("change", (e) => { state.al[k] = e.target.value; renderAlerts(); }));
+    el.querySelectorAll(".al-ack").forEach((b) => b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        const res = await fetch(`/api/alerts/${encodeURIComponent(b.dataset.id)}/ack`, { method: "POST" });
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        loadAlerts(state.al.date);
+      } catch (e) { b.disabled = false; $("#al-error").textContent = e.message; }
+    }));
+  }
+
+  // ---------- AI market analyst (backend/analyst.py) ----------
+  // Gemini only rewords facts the backend computed; the backend checks every number. Nothing is
+  // requested until the user clicks, so page loads never cost an API call.
+  const AN_KINDS = { summary: "Explain current results", alert: "Explain an alert", risks: "Summarize risks", limits: "Limits and uncertainties" };
+  const AN_SECTIONS = { measured_facts: "Measured facts", interpretation: "Interpretation", uncertainties: "Uncertainties", missing_information: "Missing information" };
+
+  async function loadAnalyst() {
+    $("#analyst").hidden = false;
+    try { state.an.status = await api("/api/analyst/status"); } catch { state.an.status = null; }
+    try { state.an.voice = await api("/api/voice/status"); } catch { state.an.voice = null; }
+    renderAnalyst();
+  }
+
+  function renderAnalyst() {
+    const s = state.an.status, r = state.an.result, el = $("#analyst");
+    const alertOpts = (state.al.data?.alerts || []).map((a) => `<option value="${esc(a.id)}">${esc(a.title)} · ${esc(a.last_seen)} (${esc(a.status)})</option>`).join("");
+    const cite = (ids) => ids.map((id) => { const f = r.facts.find((x) => x.id === id); return `<span class="an-cite" title="${esc(f ? f.text : "")}">${esc(id)}</span>`; }).join("");
+    el.innerHTML = `
+      <div class="hero-head"><span class="core-badge an">✦ AI analyst</span><h2>AI Market Analyst</h2>
+        <span class="muted">${s?.configured ? `Gemini (${esc(s.model)}) explains the backend's own numbers; it never computes them.` : "Gemini isn't configured on this server: each answer lists the backend's facts directly."}</span></div>
+      <div class="an-bar">
+        ${Object.entries(AN_KINDS).map(([k, l]) => `<button class="${k === "summary" ? "" : "ghost"}" data-kind="${k}" ${state.an.busy ? "disabled" : ""}>${l}</button>`).join("")}
+        <select id="an-alert" aria-label="Alert to explain" ${alertOpts ? "" : "disabled"}>${alertOpts || "<option>No alerts loaded</option>"}</select>
+      </div>
+      <div id="an-out" aria-live="polite">${state.an.busy ? `<p class="unavailable">Asking for an explanation of the backend's facts…</p>` : r ? (r.error ? `<p class="error">${esc(r.error)}</p>` : `
+        <p class="an-src ${r.source}">${r.source === "gemini" ? "✦ Written by Gemini, checked against the facts below" : "≡ Deterministic: the backend's facts, unedited"}${r.cached ? " · from cache" : ""}</p>
+        <p class="small muted" style="margin:0 0 8px">${esc(r.message)}</p>
+        <div class="an-grid">${Object.entries(AN_SECTIONS).map(([k, label]) => `<div class="an-sec"><div class="label-sm">${label}</div>
+          ${r.sections[k].length ? `<ul>${r.sections[k].map((it) => `<li>${esc(it.text)} ${cite(it.fact_ids)}</li>`).join("")}</ul>` : `<p class="small muted">None.</p>`}</div>`).join("")}</div>
+        <div class="an-voice">
+          <button class="ghost" id="an-listen" ${state.an.voice?.configured && r.report_id ? "" : "disabled"}>🔊 Listen to report</button>
+          <span class="small muted" id="an-voice-msg">${state.an.voice?.configured ? "Reads this report aloud, word for word (ElevenLabs)." : "Voice reports are not configured on this server; the written report above is complete."}</span>
+          <audio id="an-audio" controls hidden></audio>
+        </div>
+        <details class="advanced"><summary>The ${r.facts.length} facts given to the analyst, with sources</summary>
+          <ol class="an-facts">${r.facts.map((f) => `<li><b>${esc(f.id)}</b> ${esc(f.text)} <span class="muted">(${esc(f.source)})</span></li>`).join("")}</ol></details>
+        <p class="small muted">${esc(r.disclaimer)}</p>`) : `<p class="small muted">Pick a question. The answer is built from the decision layer, significance, robustness and alert results already on this page.</p>`}
+      </div>`;
+    el.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => askAnalyst(b.dataset.kind)));
+    $("#an-listen")?.addEventListener("click", listenToReport);
+  }
+
+  // Voice: the server reads back the report it returned (by id), so the audio matches the text.
+  async function listenToReport() {
+    const r = state.an.result, b = $("#an-listen"), msg = $("#an-voice-msg"), audio = $("#an-audio");
+    if (!r?.report_id) return;
+    b.disabled = true; msg.textContent = "Generating the audio…";
+    try {
+      const res = await fetch("/api/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ report_id: r.report_id }) });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail?.message || `Request failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      if (state.an.audio) URL.revokeObjectURL(state.an.audio);  // no leaked audio blobs
+      state.an.audio = URL.createObjectURL(blob);
+      audio.src = state.an.audio; audio.hidden = false;
+      msg.textContent = "Playing the report shown above.";
+      await audio.play().catch(() => { msg.textContent = "Audio ready: press play."; });
+    } catch (e) {
+      msg.textContent = `Voice unavailable: ${e.message}. The written report above is complete.`;
+    } finally {
+      b.disabled = false;
+    }
+  }
+
+  async function askAnalyst(kind) {
+    const alertId = kind === "alert" ? $("#an-alert")?.value : null;
+    if (kind === "alert" && !state.al.data?.alerts?.some((a) => a.id === alertId)) {
+      state.an.result = { error: "Load the alerts first and choose one to explain." }; renderAnalyst(); return;
+    }
+    const token = ++state.an.token;
+    state.an.busy = true; renderAnalyst();
+    let r;
+    try {
+      const res = await fetch("/api/analyst", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, alert_id: alertId, alerts_date: state.al.data?.as_of || null }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : body.detail?.message || `Request failed (${res.status})`);
+      r = body;
+    } catch (e) {
+      r = { error: `The analyst is unavailable: ${e.message}. The rest of the dashboard is unaffected.` };
+    }
+    if (token !== state.an.token) return;
+    state.an.busy = false; state.an.result = r;
+    renderAnalyst();
+  }
+
   // ---------- per-asset decision card ----------
   async function loadDecision(sym) {
     if (state.decAsset[sym] && !state.decAsset[sym].error) { renderDecisionCard(sym); return; }
@@ -1510,12 +1859,16 @@
       if (state.market) renderHero(state.market);
       if (state.decision) renderDecisionBand(state.decision);
       if (state.selected && $("#decision-card")) renderDecisionCard(state.selected);
+      if (state.tm.view?.series) drawTimeMachine(state.tm.view);
     });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.detail && $("#price-chart")) renderDetail(state.detail); });
 
     state.heroChart = store.get("anomality.heroChart", false);
     loadMarket();
     loadDecisionPortfolio();
+    loadTimeMachine();
+    loadAlerts();
+    loadAnalyst();
     api("/api/watchlist").then((w) => {
       state.lists = { stocks: w.stocks, crypto: w.crypto };
       renderWatchlist();

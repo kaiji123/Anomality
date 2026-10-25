@@ -11,3 +11,6 @@ data/processed/
 .pytest_cache/
 Thumbs.db
 data/cache/
+.env
+.env.*
+!.env.example

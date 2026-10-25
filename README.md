@@ -228,6 +228,9 @@ It works for any Yahoo Finance ticker.
 | [REGIME_MODEL.md](docs/REGIME_MODEL.md) | The model, the benchmark against the authors' code, all findings |
 | [REGIME_RESULTS.md](docs/REGIME_RESULTS.md) | Every metric by segment and seed (auto-generated) |
 | [DECISION_LAYER.md](docs/DECISION_LAYER.md) | The mood rule, why it replaced the first rule, the backtest, results by phase, robustness |
+| [TIME_MACHINE.md](docs/TIME_MACHINE.md) | Historical Time Machine: timing conventions, reconstructed decisions, no look-ahead, missing data |
+| [ALERTS.md](docs/ALERTS.md) | Alerts and drift detection: monitors, thresholds, windows, lifecycle, no look-ahead |
+| [AI_ANALYST.md](docs/AI_ANALYST.md) | AI Market Analyst (Gemini) and voice reports: facts in, validated explanations out, fallbacks, configuration |
 | [DATA_COLLECTION.md](docs/DATA_COLLECTION.md) | Data source, cleaning, features, limitations |
 
 ## API
@@ -240,6 +243,16 @@ It works for any Yahoo Finance ticker.
 | `GET /api/decision/{symbol}` | One asset: today's position, reason, switches, and its own backtest |
 | `GET /api/analyze/{symbol}` | Classic anomaly detection and decision model for any ticker |
 | `GET /api/scan?symbols=…` | Classic model summary for several tickers |
+| `GET /api/decision/significance` | Is the mood rule's edge over buy-and-hold more than luck? (paired block bootstrap) |
+| `GET /api/decision/robustness` | Backtest re-priced at other costs, four portfolio conventions, forecast IC/RMSE/R²/QLIKE |
+| `GET /api/timemachine` | Assets and date range of the Historical Time Machine |
+| `GET /api/timemachine/{symbol}?date=YYYY-MM-DD` | What was known at that day's close (forecast, inputs, reconstructed decision) and, separately, what happened next |
+| `GET /api/alerts[?date=YYYY-MM-DD]` | Alerts and every monitor's status (market stress, regime change, data quality, input / prediction / performance drift), using only data available that day |
+| `POST /api/alerts/{id}/ack` | Mark an alert as seen (in memory) |
+| `GET /api/analyst/status` | Whether Gemini is configured (never the key) |
+| `POST /api/analyst` | Gemini explains the backend's facts (summary, an alert, risks, limits); falls back to the facts themselves |
+| `GET /api/voice/status` | Whether voice reports are configured (never the key) |
+| `POST /api/voice` | Reads aloud a report the analyst returned, by `report_id` (audio/mpeg) |
 | `GET /api/status` | Where prices come from: Yahoo, offline mode, or paused after a rate limit |
 
 > anomality is a research tool, not financial advice. It forecasts how much prices may move,
