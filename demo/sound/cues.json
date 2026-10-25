@@ -7,42 +7,42 @@
    "id": "click"
   },
   {
-   "f": 214,
+   "f": 213,
    "kind": "click",
    "id": "click"
   },
   {
-   "f": 275,
+   "f": 274,
    "kind": "click",
    "id": "click"
   },
   {
-   "f": 285,
+   "f": 283,
    "kind": "key",
    "id": "key N"
   },
   {
-   "f": 290,
+   "f": 288,
    "kind": "key",
    "id": "key V"
   },
   {
-   "f": 295,
+   "f": 293,
    "kind": "key",
    "id": "key D"
   },
   {
-   "f": 299,
+   "f": 298,
    "kind": "key",
    "id": "key A"
   },
   {
-   "f": 312,
+   "f": 310,
    "kind": "key.return",
    "id": "Enter"
   },
   {
-   "f": 525,
+   "f": 526,
    "kind": "click",
    "id": "click"
   },
@@ -52,12 +52,47 @@
    "id": "click"
   },
   {
-   "f": 795,
+   "f": 796,
    "kind": "click",
    "id": "click"
   },
   {
-   "f": 1032,
+   "f": 1038,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1180,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1276,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1661,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1722,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1903,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 1964,
+   "kind": "click",
+   "id": "click"
+  },
+  {
+   "f": 2027,
    "kind": "click",
    "id": "click"
   },
@@ -92,7 +127,42 @@
    "id": "caption lands"
   },
   {
+   "f": 1160,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 1285,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 1402,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 1513,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 1720,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
+   "f": 2072,
+   "kind": "land.light",
+   "id": "caption lands"
+  },
+  {
    "f": 69,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 326,
    "kind": "move",
    "id": "camera move"
   },
@@ -112,17 +182,32 @@
    "id": "camera move"
   },
   {
-   "f": 1137,
+   "f": 1300,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 1635,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 1875,
+   "kind": "move",
+   "id": "camera move"
+  },
+  {
+   "f": 2241,
    "kind": "whoosh.long",
    "id": "colour flood"
   },
   {
-   "f": 1207,
+   "f": 2311,
    "kind": "pop",
    "id": "the mark pops in"
   },
   {
-   "f": 1229,
+   "f": 2333,
    "kind": "bell",
    "id": "the pulse finishes drawing"
   }

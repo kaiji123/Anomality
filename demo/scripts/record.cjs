@@ -13,7 +13,8 @@ const W = 1440, H = 810;
 const OUT = path.join(__dirname, "..", "assets", "rec");
 const FR = path.join(OUT, "frames");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const now = () => Date.now() / 1000;
+let paused = 0;   // seconds cut out of the film by pauseRec (a slow API call), subtracted from every later time
+const now = () => Date.now() / 1000 - paused;
 
 (async () => {
   fs.rmSync(FR, { recursive: true, force: true });
@@ -44,7 +45,7 @@ const now = () => Date.now() / 1000;
   cdp.on("Page.screencastFrame", async (f) => {
     const file = path.join(FR, String(n++).padStart(5, "0") + ".jpg");
     fs.writeFileSync(file, Buffer.from(f.data, "base64"));
-    frames.push({ file, ts: f.metadata.timestamp });
+    frames.push({ file, ts: f.metadata.timestamp - paused });
     try { await cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }); } catch (e) {}
   });
   await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: W * 2, maxHeight: H * 2, everyNthFrame: 1 });
@@ -81,6 +82,27 @@ const now = () => Date.now() / 1000;
       await p.evaluate((v) => window.scrollTo(0, v), y);
       await sleep(16);
     }
+  }
+  // scroll inside a scrollable element (the assistant panel) until `sel` is near its top
+  async function scrollIn(box, sel, ms = 1300) {
+    const [y0, target] = await p.$eval(box, (b, s) => {
+      const e = b.querySelector(s) || document.querySelector(s);
+      return [b.scrollTop, b.scrollTop + e.getBoundingClientRect().top - b.getBoundingClientRect().top - 40];
+    }, sel);
+    const steps = Math.round(ms / 16);
+    for (let i = 1; i <= steps; i++) {
+      await p.$eval(box, (b, v) => { b.scrollTop = v; }, y0 + (target - y0) * ease(i / steps));
+      await sleep(16);
+    }
+  }
+  // stop the screencast while `fn` runs, then cut the gap out of the film's clock
+  async function pauseRec(fn) {
+    await cdp.send("Page.stopScreencast");
+    const a = Date.now() / 1000;
+    await fn();
+    paused += Date.now() / 1000 - a;
+    await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: W * 2, maxHeight: H * 2, everyNthFrame: 1 });
+    await sleep(150);
   }
   await sleep(300);
   const t0 = now();
@@ -141,19 +163,64 @@ const now = () => Date.now() / 1000;
   await clickOn('#dec-period button[data-p="COVID crash"]', 900);
   mark("covid");
   await sleep(3200);
+
+  // 6) the assistant bubble: what would you like to see?
+  mark("assist");
+  await clickOn("#assist-fab", 1000);
+  await sleep(1800);
+
+  // 7) the Time Machine: opens on the eve of the COVID crash, known vs. what happened next
+  mark("tm");
+  await clickOn('.assist-choices button[data-tab="tm"]', 700);
+  await p.waitForSelector("#tm-body .tm-grid", { timeout: 60000 });
+  await sleep(300);
+  await moveTo(650, 300, 900);
+  await sleep(2400);
+  mark("tm-after");
+  await moveTo(1150, 345, 900);
+  await sleep(2400);
+  mark("tm-chart");
+  await scrollIn(".assist-body", "#tm-chart", 1300);
+  await sleep(2600);
+
+  // 8) alerts: each one shows its measurement and threshold
+  mark("alerts");
+  await clickOn("#assist-back", 900);
+  await sleep(700);
+  await clickOn('.assist-choices button[data-tab="al"]', 800);
+  await p.waitForSelector("#alerts .al-item", { timeout: 60000 });
+  await sleep(300);
+  await moveTo(1300, 560, 1000);
+  await sleep(3200);
+
+  // 9) the AI analyst: Gemini explains the backend's facts; every number checked
+  mark("analyst");
+  await clickOn("#assist-back", 900);
+  await sleep(700);
+  await clickOn('.assist-choices button[data-tab="an"]', 800);
+  await p.waitForSelector("#analyst .an-bar", { timeout: 60000 });
+  await sleep(700);
+  await clickOn('.an-bar button[data-kind="summary"]', 900);
+  await sleep(900);
+  // Gemini takes ~15 s: pause the recording while it answers, so the film cuts straight to the result
+  await pauseRec(() => p.waitForSelector("#an-out .an-src", { timeout: 120000 }).then(() => sleep(600)));
+  mark("answer");
+  await moveTo(640, 420, 1000);
+  await sleep(4200);
   mark("end");
+  const tEnd = now() + 0.4;   // the screencast only sends frames when the page changes: hold the last one to here
   await cdp.send("Page.stopScreencast");
   await sleep(300);
   await browser.close();
 
   // ---- frames -> 30 fps video; events -> the video's clock
   const first = frames[0].ts;
-  const list = frames.map((f, i) => `file '${f.file}'\nduration ${((frames[i + 1] ? frames[i + 1].ts : f.ts + 0.1) - f.ts).toFixed(4)}`).join("\n") + `\nfile '${frames[frames.length - 1].file}'\n`;
+  const list = frames.map((f, i) => `file '${f.file}'\nduration ${((frames[i + 1] ? frames[i + 1].ts : Math.max(tEnd, f.ts + 0.1)) - f.ts).toFixed(4)}`).join("\n") + `\nfile '${frames[frames.length - 1].file}'\n`;
   fs.writeFileSync(path.join(OUT, "frames.txt"), list);
   execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", path.join(OUT, "frames.txt"),
-    "-vf", "fps=30,scale=2880:1620:flags=lanczos,format=yuv420p", "-c:v", "libx264", "-crf", "14", "-preset", "slow",
+    "-vf", "fps=30,scale=2880:1620:flags=lanczos,format=yuv420p", "-t", (Math.max(tEnd, frames[frames.length - 1].ts + 0.1) - first).toFixed(3), "-c:v", "libx264", "-crf", "14", "-preset", "slow",
     path.join(OUT, "session.mp4")]);
-  const track = { w: W, h: H, start: +(t0 - first).toFixed(3), duration: +(frames[frames.length - 1].ts - first + 0.1).toFixed(3),
+  const track = { w: W, h: H, start: +(t0 - first).toFixed(3), duration: +(Math.max(tEnd, frames[frames.length - 1].ts + 0.1) - first).toFixed(3),
     events: ev.map((e) => ({ ...e, t: +(e.t - first).toFixed(3) })) };
   fs.writeFileSync(path.join(OUT, "track.js"), "window.TRACK = " + JSON.stringify(track) + ";\n");
   console.log(`${frames.length} frames, ${track.duration}s; marks:`, track.events.filter((e) => e.mark).map((e) => `${e.mark}@${e.t}`).join(" "));

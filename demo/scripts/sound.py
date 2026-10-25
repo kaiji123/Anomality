@@ -17,8 +17,8 @@ sys.path.insert(0, HERE)
 from earshot.forge import kit  # noqa: E402
 
 SR, FPS = 48000, 30
-TOTAL = 44.9
-END = 37.7                      # the end card starts here
+TOTAL = 81.7
+END = 74.5                      # the end card starts here
 KIT_JSON = os.path.join(ROOT, "sound", "kit.json")
 KIT_DIR = os.path.join(ROOT, "sound", "takes")
 MUSIC_LUFS = -25.5             # absolute: the bed sits well under the UI sounds ("it should be subtle")
@@ -72,7 +72,7 @@ def main():
     track = json.loads(open(os.path.join(ROOT, "assets", "rec", "track.js")).read().split("=", 1)[1].rstrip().rstrip(";"))
     html = open(os.path.join(ROOT, "compositions", "screen.html")).read()
     moves = [(float(a), float(d)) for a, d in re.findall(r"move\(([\d.]+), ([\d.]+),", html)]
-    caps = [float(a) for a in re.findall(r'cap\("#scr-c\d", ([\d.]+),', html)]
+    caps = [float(a) for a in re.findall(r'cap\("#scr-c\d+", ([\d.]+),', html)]
     n = int(TOTAL * SR)
     meter = pyln.Meter(SR)
     K = Kit()
