@@ -992,6 +992,16 @@
   const posChip = (level, big = false) => (level ? `<span class="pos ${level}${big ? " lg" : ""}">${POS[level].icon} ${big ? POS[level].word : level}</span>` : "");
   const growth = (v) => (v == null ? "–" : `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(0)}%`);
   const drop = (v) => (v == null ? "–" : `−${Math.abs(v * 100).toFixed(1)}%`); // drawdowns are ≤ 0
+  // Which values win a comparison: the best at the precision shown. Nobody wins when all tie.
+  // Drawdowns are negative, so "higher is better" also picks the smaller drop.
+  function winners(vals, fmt, lowerBetter = false) {
+    const ok = vals.filter((v) => v != null);
+    if (ok.length < 2) return vals.map(() => false);
+    const best = fmt(lowerBetter ? Math.min(...ok) : Math.max(...ok));
+    const w = vals.map((v) => v != null && fmt(v) === best);
+    return w.filter(Boolean).length === ok.length ? vals.map(() => false) : w;
+  }
+  const win = (on, html) => (on ? `<b class="win">${html}</b>` : html);
   const fmtDate = (s) => { const [y, m, d] = s.split("-").map(Number); return `${MONTHS[m - 1]} ${d}, ${y}`; };
   const MOOD_CUTS = [0.35, 0.70]; // Calm | Normal | Choppy; Stormy starts at rule.stormy_pct
   const moodOfPct = (p, rule) => (p < MOOD_CUTS[0] ? "Calm" : p < MOOD_CUTS[1] ? "Normal" : p < rule.stormy_pct ? "Choppy" : "Stormy");
@@ -1162,15 +1172,19 @@
     const f = r.forecast, MODEL = { ours: "RG-ResMoE, log inputs (ours)", original: "RG-ResMoE, original inputs", simple: "Simple estimate (last month)" };
     const fmt = (v, d = 3) => (v == null ? "–" : v.toFixed(d));
     const all = f?.periods?.all;
-    const bestOf = (k, lower) => all && (lower ? Math.min : Math.max)(...f.models.map((m) => all[m][k]));
-    const cell = (m, k, lower) => `<td class="num${all[m][k] === bestOf(k, lower) ? " best" : ""}">${fmt(all[m][k])}</td>`;
+    const sh2 = (v) => v.toFixed(2);
+    const cell = (m, k, lower) => `<td class="num${winners(f.models.map((x) => all[x][k]), fmt, lower)[f.models.indexOf(m)] ? " best" : ""}">${fmt(all[m][k])}</td>`;
+    const pair = (o, s, k) => { const [a, b] = winners([o[k], s[k]], fmt, k !== "ic" && k !== "r2"); return `${win(a, fmt(o[k]))} / ${win(b, fmt(s[k]))}`; };
     return `
       <section class="report-sec">
         <h3>Trading costs</h3>
         <div class="table-scroll"><table class="compare plain dec-tbl">
           <thead><tr><th>One-way cost</th>${c.bps.map((b) => `<th class="num">${(b / 100).toFixed(2)}%${b === 5 ? " ★" : ""}</th>`).join("")}</tr></thead>
-          <tbody>${names.map((n) => `<tr><td><i class="swatch" style="background:${sysColor(n)}"></i>${SYS_SHORT[n]}</td>${c.systems[n].map((x) =>
-            `<td class="num">${growth(x.net_return)}<br><span class="muted small">reward/risk ${x.sharpe.toFixed(2)}</span></td>`).join("")}</tr>`).join("")}</tbody>
+          <tbody>${names.map((n, i) => `<tr><td><i class="swatch" style="background:${sysColor(n)}"></i>${SYS_SHORT[n]}</td>${c.systems[n].map((x, j) => {
+            const col = names.map((m) => c.systems[m][j]);
+            const wG = winners(col.map((y) => y.net_return), growth)[i], wS = winners(col.map((y) => y.sharpe), sh2)[i];
+            return `<td class="num">${win(wG, growth(x.net_return))}<br><span class="muted small">reward/risk ${win(wS, sh2(x.sharpe))}</span></td>`;
+          }).join("")}</tr>`).join("")}</tbody>
         </table></div>
         <p class="small muted" style="margin:6px 0 0">★ = the cost used everywhere else. Each column is a full re-run of the same positions with that cost on every trade. ${be != null
           ? `The rule's extra <b>growth</b> over buy and hold disappears above <b>${(be / 100).toFixed(3)}%</b> per trade (${be} bps); its reward / risk stays higher at every cost shown.`
@@ -1183,10 +1197,11 @@
           <tbody>${[["A", `Published: equal weight over the ${r.conventions.assets.A} assets present that day, rebalanced daily for free`],
             ["B", `Only the ${r.conventions.assets.fixed} assets present from day one`],
             ["C", "Same, weights left to drift (a true buy-and-hold basket)"],
-            ["D", "Same as B, daily rebalancing trades charged"]].map(([k, label]) => `<tr><td>${k}. ${esc(label)}</td>${["mood_rule", "buy_and_hold"].map((n) => {
-              const v = r.conventions[k][n];
-              return `<td class="num">${growth(v.net_return)}<br><span class="muted small">reward/risk ${v.sharpe.toFixed(2)} · worst ${drop(v.max_drawdown)}</span></td>`;
-            }).join("")}</tr>`).join("")}</tbody>
+            ["D", "Same as B, daily rebalancing trades charged"]].map(([k, label]) => `<tr><td>${k}. ${esc(label)}</td>${(() => {
+              const sys = ["mood_rule", "buy_and_hold"], vs = sys.map((n) => r.conventions[k][n]);
+              const wG = winners(vs.map((v) => v.net_return), growth), wS = winners(vs.map((v) => v.sharpe), sh2), wD = winners(vs.map((v) => v.max_drawdown), drop);
+              return vs.map((v, i) => `<td class="num">${win(wG[i], growth(v.net_return))}<br><span class="muted small">reward/risk ${win(wS[i], sh2(v.sharpe))} · worst ${win(wD[i], drop(v.max_drawdown))}</span></td>`).join("");
+            })()}</tr>`).join("")}</tbody>
         </table></div>
         <p class="small muted" style="margin:6px 0 0">The rule's higher reward / risk holds under every convention. "Buy and hold" in this app means equal weight, rebalanced daily; a basket left to drift ends up dominated by the crypto that rose most, with far bigger drops.</p>
       </section>` : ""}
@@ -1199,7 +1214,7 @@
         <div class="table-scroll"><table class="compare plain dec-tbl" style="margin-top:10px">
           <thead><tr><th>Market phase</th><th class="num">RMSE, ours / simple</th><th class="num">QLIKE, ours / simple</th><th class="num">Forecasts</th></tr></thead>
           <tbody>${Object.entries(f.periods).filter(([k]) => k !== "all").map(([k, v]) => v.ours
-            ? `<tr><td>${esc(k)}</td><td class="num">${fmt(v.ours.rmse)} / ${fmt(v.simple.rmse)}</td><td class="num">${fmt(v.ours.qlike)} / ${fmt(v.simple.qlike)}</td><td class="num">${v.ours.n.toLocaleString()}</td></tr>`
+            ? `<tr><td>${esc(k)}</td><td class="num">${pair(v.ours, v.simple, "rmse")}</td><td class="num">${pair(v.ours, v.simple, "qlike")}</td><td class="num">${v.ours.n.toLocaleString()}</td></tr>`
             : `<tr><td>${esc(k)}</td><td colspan="3" class="muted">No forecasts in this phase</td></tr>`).join("")}</tbody>
         </table></div>
         <p class="small muted" style="margin:6px 0 0">All ${all.ours.n.toLocaleString()} out-of-sample forecasts, 3-seed average, floored at 3%; every model is scored on the same rows. A better forecast does not by itself mean a better portfolio. The two RG-ResMoE versions are close; the gain over the simple estimate is the larger effect.</p>
@@ -1294,8 +1309,8 @@
   function renderBacktestTable(p, key) {
     const names = ["mood_rule", "buy_and_hold", ...(state.decPrev ? ["surprise_rule"] : [])];
     const rows = names.map((n) => ({ n, s: p.systems[n][key] })).filter((r) => r.s);
-    const best = (f) => Math.max(...rows.map((r) => f(r.s)));
-    const bGrowth = best((s) => s.net_return), bDrop = best((s) => s.max_drawdown), bSharpe = best((s) => s.sharpe);
+    const col = (k, fmt) => winners(rows.map((r) => r.s[k]), fmt);
+    const wG = col("net_return", growth), wD = col("max_drawdown", drop), wS = col("sharpe", (v) => v.toFixed(2));
     const r = p.systems.mood_rule[key], b = p.systems.buy_and_hold[key];
     const label = key === "all" ? `${p.since.slice(0, 4)}–${p.through.slice(0, 4)}` : key;
     const same = r && b && r.net_return === b.net_return && r.max_drawdown === b.max_drawdown;
@@ -1305,10 +1320,10 @@
     $("#dec-table").innerHTML = `
       <table class="compare plain dec-tbl">
         <thead><tr><th></th><th>Growth</th><th>Worst drop</th><th title="Return per unit of risk (Sharpe ratio). Higher is better.">Reward / risk</th></tr></thead>
-        <tbody>${rows.map(({ n, s }) => `<tr><td><i class="swatch" style="background:${sysColor(n)}"></i>${SYS_SHORT[n]}</td>
-          <td class="${s.net_return === bGrowth ? "best" : ""}">${growth(s.net_return)}</td>
-          <td class="${s.max_drawdown === bDrop ? "best" : ""}">${drop(s.max_drawdown)}</td>
-          <td class="${s.sharpe === bSharpe ? "best" : ""}">${s.sharpe.toFixed(2)}</td></tr>`).join("")}</tbody>
+        <tbody>${rows.map(({ n, s }, i) => `<tr><td><i class="swatch" style="background:${sysColor(n)}"></i>${SYS_SHORT[n]}</td>
+          <td class="${wG[i] ? "best" : ""}">${growth(s.net_return)}</td>
+          <td class="${wD[i] ? "best" : ""}">${drop(s.max_drawdown)}</td>
+          <td class="${wS[i] ? "best" : ""}">${s.sharpe.toFixed(2)}</td></tr>`).join("")}</tbody>
       </table>
       <p class="dec-story">${story}</p>
       <p class="small muted" style="margin:6px 0 0">Reward / risk is the Sharpe ratio: return per unit of volatility. Bold = best in each column.${state.decPrev ? " The previous rule cut back after unexpectedly big swings, which usually came just before rebounds." : ""}</p>`;
@@ -1367,15 +1382,14 @@
               <tbody>${Object.keys(rec.mood_rule).map((k) => {
                 const r = rec.mood_rule[k], b = rec.buy_and_hold[k];
                 const ok = r?.n_days && b?.n_days;
-                // "Better" only when the difference shows at the displayed precision.
-                const gWin = ok && growth(r.net_return) !== growth(b.net_return) && r.net_return > b.net_return;
-                const dWin = ok && drop(r.max_drawdown) !== drop(b.max_drawdown) && r.max_drawdown > b.max_drawdown;
+                const [gR, gB] = ok ? winners([r.net_return, b.net_return], growth) : [false, false];
+                const [dR, dB] = ok ? winners([r.max_drawdown, b.max_drawdown], drop) : [false, false];
                 return `<tr><td>${k === "all" ? "Whole test" : esc(k)}</td>
-                  <td class="${gWin ? "best" : ""}">${cell(r, (s) => growth(s.net_return))}</td><td>${cell(b, (s) => growth(s.net_return))}</td>
-                  <td class="${dWin ? "best" : ""}">${cell(r, (s) => drop(s.max_drawdown))}</td><td>${cell(b, (s) => drop(s.max_drawdown))}</td></tr>`;
+                  <td class="${gR ? "best" : ""}">${cell(r, (s) => growth(s.net_return))}</td><td class="${gB ? "best" : ""}">${cell(b, (s) => growth(s.net_return))}</td>
+                  <td class="${dR ? "best" : ""}">${cell(r, (s) => drop(s.max_drawdown))}</td><td class="${dB ? "best" : ""}">${cell(b, (s) => drop(s.max_drawdown))}</td></tr>`;
               }).join("")}</tbody>
             </table>
-            <p class="small muted" style="margin:8px 0 0">Bold = the rule did better. Identical rows mean the mood never turned Stormy in that period. One asset is noisy; judge the rule on the ${state.decision?.assets ?? 56}-asset backtest above. Not financial advice.</p>
+            <p class="small muted" style="margin:8px 0 0">Bold = better in that column. Identical rows mean the mood never turned Stormy in that period. One asset is noisy; judge the rule on the ${state.decision?.assets ?? 56}-asset backtest above. Not financial advice.</p>
           </div>
         </div>
       </div>`;

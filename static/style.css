@@ -439,8 +439,8 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .mood-sm.Stormy { background: var(--critical); color: #fff; }
 .hero-more summary { list-style: none; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .hero-more summary::-webkit-details-marker { display: none; }
-.hero-more summary::after { content: "▾"; font-size: 12px; }
-.hero-more[open] summary::after { content: "▴"; }
+.hero-more summary::after { content: "▾"; font-size: 12px; display: inline-block; transition: transform .25s ease; }
+.hero-more[open] summary::after { transform: rotate(180deg); }
 .hero-more .when-open { display: none; }
 .hero-more[open] .when-open { display: inline; }
 .hero-more[open] .when-closed { display: none; }
@@ -615,8 +615,27 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .reveal .hero-tile:nth-child(2) { animation-delay: .06s; }
 .reveal .hero-tile:nth-child(3) { animation-delay: .12s; }
 .reveal .hero-tile:nth-child(4) { animation-delay: .18s; }
+/* expanding sections: content fades and slides in, sections one after another */
+@keyframes unfold { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.hero-more[open] > :not(summary), .advanced[open] > :not(summary) { animation: unfold .3s ease-out both; }
+.hero-more[open] .report-sec { animation: rise .4s ease-out both; }
+.hero-more[open] .report-sec:nth-child(2) { animation-delay: .08s; }
+.hero-more[open] .report-sec:nth-child(3) { animation-delay: .16s; }
+.tree li > ul { animation: unfold .25s ease-out; }
+/* smooth height change where the browser supports it (Chrome 131+); elsewhere it just opens */
+@supports (interpolate-size: allow-keywords) {
+  .hero-more, .advanced { interpolate-size: allow-keywords; }
+  .hero-more::details-content, .advanced::details-content {
+    block-size: 0; overflow: hidden;
+    transition: block-size .35s ease, content-visibility .35s allow-discrete;
+  }
+  .hero-more[open]::details-content, .advanced[open]::details-content { block-size: auto; }
+}
 @media (prefers-reduced-motion: reduce) {
   .reveal, .reveal .hero-tile { animation: none; }
+  .hero-more *, .advanced *, .tree ul { animation: none !important; }
+  .hero-more summary::after { transition: none; }
+  .hero-more::details-content, .advanced::details-content { transition: none; }
   .sm-marker { transition: none; }
 }
 
@@ -638,3 +657,5 @@ td .sym { display: inline-block; width: 14px; text-align: center; }
 .dec-robust .report-sec h3 { font-size: 13.5px; }
 .dec-robust td.num, .dec-robust th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table-scroll { overflow-x: auto; }
+/* winner of a comparison inside a table cell (app.js winners()) */
+.dec-tbl b.win { font-weight: 700; color: var(--pos-full); }
